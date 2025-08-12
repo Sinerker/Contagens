@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Limpar Banco de Dados</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div
+      style="
+        max-width: 400px;
+        margin: 40px auto;
+        padding: 24px;
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      "
+    >
+      <h2 style="color: #e53935">Atenção!</h2>
+      <p>
+        Esta ação irá apagar <b>todos os bancos de dados</b> do aplicativo neste
+        dispositivo.<br />Esta operação não pode ser desfeita.
+      </p>
+      <button
+        id="apagar-banco"
+        class="btn-limpar-banco"
+        style="width: 100%; margin-bottom: 16px"
+      >
+        Apagar Banco de Dados
+      </button>
+      <button
+        id="voltar-index"
+        style="
+          width: 100%;
+          background: #2a4d7a;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 10px 0;
+          font-size: 1rem;
+          cursor: pointer;
+        "
+      >
+        Voltar sem apagar
+      </button>
+    </div>
+    <script>
+      document.getElementById("voltar-index").onclick = function () {
+        window.location.href = "index.html";
+      };
+      document.getElementById("apagar-banco").onclick = function () {
+        if (
+          confirm(
+            "Tem certeza que deseja apagar TODOS os bancos de dados? Esta ação não pode ser desfeita!"
+          )
+        ) {
+          // Apagar todos os bancos de dados do IndexedDB
+          if (window.indexedDB && indexedDB.databases) {
+            indexedDB.databases().then((dbs) => {
+              let promises = dbs.map((db) => indexedDB.deleteDatabase(db.name));
+              Promise.all(promises).then(() => {
+                alert("Todos os bancos de dados foram apagados!");
+                window.location.href = "index.html";
+              });
+            });
+          } else {
+            // Fallback para navegadores sem indexedDB.databases()
+            indexedDB.deleteDatabase("LoteDB");
+            indexedDB.deleteDatabase("contagensDeEstoqueDB");
+            setTimeout(function () {
+              alert("Bancos de dados principais apagados!");
+              window.location.href = "index.html";
+            }, 800);
+          }
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Árvore de Níveis</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="usuario-loja-row">
+      <div class="usuario-loja-group">
+        <label for="usuario">Usuário:</label>
+        <select id="usuario" name="usuario">
+          <option value="Alex">Alex</option>
+          <option value="João">João</option>
+          <option value="Luciano">Luciano</option>
+          <option value="Moseley">Moseley</option>
+        </select>
+      </div>
+      <div class="usuario-loja-group">
+        <label for="loja">Loja:</label>
+        <select id="loja" name="loja">
+          <option value="001-DZ9">001-DZ9</option>
+          <option value="002-VICENTE">002-VICENTE</option>
+          <option value="003-NOCA">003-NOCA</option>
+          <option value="004-GETULIO">004-GETULIO</option>
+          <option value="005-NEW">005-NEW</option>
+          <option value="007-IVASKO_SMS">007-IVASKO_SMS</option>
+          <option value="100-CD">100-CD</option>
+          <option value="101-MARIANO_IRATI">101-MARIANO_IRATI</option>
+          <option value="102-MARIANO_SMS">102-MARIANO_SMS</option>
+          <option value="103-MARIANO_UVARANAS">103-MARIANO_UVARANAS</option>
+          <option value="104-MARIANO_LDS">104-MARIANO_LDS</option>
+          <option value="105-MARIANO_CARA">105-MARIANO_CARA</option>
+          <option value="300-TRAJANO">300-TRAJANO</option>
+          <option value="301-VICENTE">301-VICENTE</option>
+          <option value="302-MOTIVAÇÃO_TB">302-MOTIVAÇÃO_TB</option>
+          <option value="303-CALED_IMBITUVA">303-CALED_IMBITUVA</option>
+          <option value="304-POSECOL_IRATI">304-POSECOL_IRATI</option>
+          <option value="305-ALADIM_TB">305-ALADIM_TB</option>
+          <option value="308-PITANGA">308-PITANGA</option>
+          <option value="309-SALDANHA">309-SALDANHA</option>
+          <option value="310-PRUDE">310-PRUDE</option>
+          <option value="311-MASTER">311-MASTER</option>
+          <option value="312-P.MANSA">312-P.MANSA</option>
+          <option value="313-CAROLINE">313-CAROLINE</option>
+          <option value="314-VERNALHA">314-VERNALHA</option>
+          <option value="315-P.CENTRAL">315-P.CENTRAL</option>
+          <option value="316-CALED_XV">316-CALED_XV</option>
+          <option value="317-POSECOL_UVARANAS">317-POSECOL_UVARANAS</option>
+          <option value="318-KENNEDY">318-KENNEDY</option>
+          <option value="319-SFELIC">319-SFELIC</option>
+          <option value="398-PALMEIRA">398-PALMEIRA</option>
+        </select>
+      </div>
+    </div>
+    <h1>Selecione as categorias</h1>
+    <div id="tree-container">
+      <!-- A árvore será gerada dinamicamente pelo script.js -->
+    </div>
+    <div id="lote-container" style="margin-top: 20px">
+      <button id="criar-lote">Criar Lote</button>
+      <button id="limpar-banco" class="btn-limpar-banco">Limpar Banco</button>
+    </div>
+    <div
+      id="continuar-contagens-container"
+      style="display: none; margin-top: 18px"
+    >
+      <button
+        id="continuar-contagens"
+        style="
+          background: #05b814;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 10px 22px;
+          font-size: 1rem;
+          cursor: pointer;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+          width: 100%;
+        "
+      >
+        Continuar Contagens
+      </button>
+    </div>
+    <script>
+      document.getElementById("limpar-banco").onclick = function () {
+        window.location.href = "limpar-banco.html";
+      };
+      // Lógica para mostrar o botão 'Continuar Contagens' se houver banco de dados de lote
+      if (window.indexedDB && indexedDB.databases) {
+        indexedDB.databases().then((dbs) => {
+          if (dbs.some((db) => db.name === "LoteDB")) {
+            document.getElementById(
+              "continuar-contagens-container"
+            ).style.display = "";
+          }
+        });
+      } else {
+        // Fallback para navegadores antigos: tenta abrir o banco
+        var req = indexedDB.open("LoteDB");
+        req.onsuccess = function (e) {
+          var db = e.target.result;
+          if (db.objectStoreNames.length > 0) {
+            document.getElementById(
+              "continuar-contagens-container"
+            ).style.display = "";
+          }
+          db.close();
+        };
+      }
+      document.getElementById("continuar-contagens").onclick = function () {
+        window.location.href = "contagens.html";
+      };
+    </script>
+    <script>
+      document.getElementById("limpar-banco").onclick = function () {
+        window.location.href = "limpar-banco.html";
+      };
+    </script>
+    <script src="script.js"></script>
+    <script>
+      function salvarUsuarioLojaLS() {
+        const usuario = document.getElementById("usuario").value.trim();
+        const loja = document.getElementById("loja").value.trim();
+        if (usuario) localStorage.setItem("usuario", usuario);
+        if (loja) localStorage.setItem("loja", loja);
+      }
+      document
+        .getElementById("usuario")
+        .addEventListener("input", salvarUsuarioLojaLS);
+      document
+        .getElementById("loja")
+        .addEventListener("input", salvarUsuarioLojaLS);
+      document.getElementById("criar-lote").addEventListener("click", () => {
+        const usuario = document.getElementById("usuario").value.trim();
+        const loja = document.getElementById("loja").value.trim();
+
+        if (!usuario) {
+          alert("O campo Usuário é obrigatório.");
+          document.getElementById("usuario").focus();
+          return;
+        }
+
+        if (!loja) {
+          alert("O campo Loja é obrigatório.");
+          document.getElementById("loja").focus();
+          return;
+        }
+
+        // Salvar usuário e loja no localStorage para exportação
+        localStorage.setItem("usuario", usuario);
+        localStorage.setItem("loja", loja);
+        // Continuar com a lógica de criação do lote
+      });
+    </script>
+  </body>
+</html>
