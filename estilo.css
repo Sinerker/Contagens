@@ -1,0 +1,290 @@
+/* =============================================
+   estilo.css — a linguagem visual do sistema
+   =============================================
+   Mesmas medidas e cores do InventarioPostos, para
+   quem já conta no coletor não reaprender nada.
+   ============================================= */
+
+*, *::before, *::after {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+  --clr-primary: #1a6fd4;
+  --clr-primary-dark: #1558ab;
+  --clr-danger: #d93025;
+  --clr-success: #1e8c45;
+  --clr-warning-bg: #fff3cd;
+  --clr-warning-border: #e6c000;
+  --clr-warning-text: #7a5800;
+
+  --clr-bg: #f0f2f5;
+  --clr-surface: #ffffff;
+  --clr-surface-2: #f8f9fa;
+  --clr-border: #dadce0;
+
+  --clr-text: #202124;
+  --clr-text-secondary: #5f6368;
+  --clr-text-on-primary: #ffffff;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.10);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.12);
+  --touch-min: 48px;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --clr-bg: #111318;
+    --clr-surface: #1e2128;
+    --clr-surface-2: #282c34;
+    --clr-border: #3c4048;
+    --clr-text: #e3e5e8;
+    --clr-text-secondary: #9aa0aa;
+    --clr-primary: #4da3ff;
+    --clr-primary-dark: #3b8fe0;
+    --clr-danger: #f2705f;
+    --clr-success: #4caf72;
+    --clr-warning-bg: #3a2e00;
+    --clr-warning-border: #a88000;
+    --clr-warning-text: #ffd54f;
+  }
+}
+
+body {
+  font-family: var(--font);
+  background: var(--clr-bg);
+  color: var(--clr-text);
+  min-height: 100vh;
+}
+
+a { color: var(--clr-primary); }
+a:hover { color: var(--clr-primary-dark); }
+
+/* ---------- Cabeçalho ---------- */
+.cabecalho {
+  background: var(--clr-primary);
+  color: var(--clr-text-on-primary);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: 0 .5rem;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+}
+
+.cabecalho-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cabecalho-titulo {
+  font-size: .95rem; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cabecalho-sub { font-size: .78rem; opacity: .85; }
+
+/* 44px: alvo de toque mínimo. O app antigo usava 34
+   e ficava pequeno para quem está em pé, no corredor. */
+.btn-icone {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  border: none; border-radius: var(--radius-sm);
+  background: transparent; color: inherit; cursor: pointer;
+}
+.btn-icone:hover { background: rgba(255,255,255,.15); }
+
+/* ---------- Estrutura ---------- */
+.conteudo {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cartao {
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.cartao-titulo { font-size: 1rem; font-weight: 700; }
+.cartao-ajuda { font-size: .85rem; color: var(--clr-text-secondary); line-height: 1.45; }
+
+.secao-titulo {
+  font-size: .78rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+  color: var(--clr-text-secondary);
+}
+
+/* ---------- Campos ---------- */
+.campo { display: flex; flex-direction: column; gap: .35rem; flex: 1; }
+
+.rotulo {
+  font-size: .78rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em;
+  color: var(--clr-text-secondary);
+}
+
+.entrada, .lista {
+  width: 100%;
+  min-height: var(--touch-min);
+  padding: .6rem .8rem;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--clr-border);
+  background: var(--clr-surface-2);
+  color: var(--clr-text);
+  font-size: 1rem;
+  font-family: var(--font);
+  transition: border-color .15s, box-shadow .15s;
+}
+.entrada:focus, .lista:focus {
+  outline: none;
+  border-color: var(--clr-primary);
+  box-shadow: 0 0 0 3px rgba(26,111,212,.18);
+}
+
+/* ---------- Botões ---------- */
+.botao {
+  min-height: var(--touch-min);
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .7rem 1.2rem;
+  border: none; border-radius: var(--radius-sm);
+  background: var(--clr-primary);
+  color: #fff;
+  font-family: var(--font); font-size: 1rem; font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+}
+.botao:hover:not(:disabled) { background: var(--clr-primary-dark); }
+.botao:disabled { opacity: .55; cursor: not-allowed; }
+
+.botao--fantasma {
+  background: transparent;
+  color: var(--clr-primary);
+  border: 1.5px solid var(--clr-border);
+}
+.botao--fantasma:hover:not(:disabled) { background: var(--clr-surface-2); }
+
+.botao--perigo { background: var(--clr-danger); }
+.botao--perigo:hover:not(:disabled) { background: var(--clr-danger); filter: brightness(.9); }
+
+.botao--pequeno { min-height: 38px; padding: .4rem .8rem; font-size: .88rem; }
+
+/* ---------- Avisos ---------- */
+.aviso {
+  padding: .7rem .9rem;
+  border-radius: var(--radius-sm);
+  font-size: .9rem;
+  line-height: 1.45;
+  border: 1px solid transparent;
+}
+.aviso--erro   { background: rgba(217,48,37,.12);  border-color: var(--clr-danger);  color: var(--clr-danger); }
+.aviso--ok     { background: rgba(30,140,69,.12);  border-color: var(--clr-success); color: var(--clr-success); }
+.aviso--atencao{ background: var(--clr-warning-bg); border-color: var(--clr-warning-border); color: var(--clr-warning-text); }
+.aviso--neutro { background: var(--clr-surface-2); border-color: var(--clr-border); color: var(--clr-text-secondary); }
+
+/* ---------- Listas de registros ---------- */
+.linha {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .7rem .85rem;
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-sm);
+  background: var(--clr-surface-2);
+}
+.linha-info { flex: 1; min-width: 0; }
+.linha-titulo { font-size: .95rem; font-weight: 600; }
+.linha-sub { font-size: .8rem; color: var(--clr-text-secondary); margin-top: .1rem; }
+
+.etiqueta {
+  font-size: .7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+  padding: .2rem .45rem;
+  border-radius: 999px;
+  background: rgba(26,111,212,.15);
+  color: var(--clr-primary);
+}
+.etiqueta--apagada { background: var(--clr-border); color: var(--clr-text-secondary); }
+.etiqueta--ok { background: rgba(30,140,69,.15); color: #1e8c45; }
+.etiqueta--falta { background: rgba(217,48,37,.15); color: #d93025; }
+
+/* O atributo hidden vem do navegador com display:none, mas qualquer classe
+   nossa que declare display ganha dele — foi assim que um botão marcado como
+   hidden apareceu na tela de fechamento. Esta regra fecha o buraco de uma vez,
+   para todos os 28 elementos do site que dependem de hidden. */
+[hidden] { display: none !important; }
+
+/* ---------- Progresso ---------- */
+.barra {
+  height: 8px; width: 100%;
+  border-radius: 999px;
+  background: var(--clr-border);
+  overflow: hidden;
+}
+.barra-cheia {
+  height: 100%; width: 0;
+  background: var(--clr-primary);
+  transition: width .2s;
+}
+
+/* ---------- Resumo em números ---------- */
+.numeros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.numero {
+  padding: .6rem;
+  border-radius: var(--radius-sm);
+  background: var(--clr-surface-2);
+  border: 1px solid var(--clr-border);
+  text-align: center;
+}
+.numero-valor { font-size: 1.25rem; font-weight: 700; }
+.numero-rotulo {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--clr-text-secondary); margin-top: .15rem;
+}
+
+/* ---------- Abas ---------- */
+.abas { display: flex; gap: .35rem; border-bottom: 1px solid var(--clr-border); }
+.aba {
+  min-height: 44px;
+  padding: .6rem 1rem;
+  border: none; background: transparent;
+  color: var(--clr-text-secondary);
+  font-family: var(--font); font-size: .95rem; font-weight: 600;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+}
+.aba.ativa { color: var(--clr-primary); border-bottom-color: var(--clr-primary); }
+
+.painel { display: none; flex-direction: column; gap: 1rem; }
+.painel.ativo { display: flex; }
+
+/* ---------- Arquivos ---------- */
+.solta {
+  border: 2px dashed var(--clr-border);
+  border-radius: var(--radius-md);
+  padding: 1.1rem;
+  text-align: center;
+  background: var(--clr-surface-2);
+  cursor: pointer;
+}
+.solta:hover { border-color: var(--clr-primary); }
+.solta input { display: none; }
+
+@media (max-width: 480px) {
+  html { font-size: 14px; }
+  :root { --touch-min: 42px; }
+  .conteudo { padding: .75rem; gap: .75rem; }
+  .numeros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

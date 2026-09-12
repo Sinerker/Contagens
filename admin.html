@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a6fd4" />
+  <title>Administração · Contagens</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+  <header class="cabecalho">
+    <a class="btn-icone" href="lotes.html" aria-label="Voltar">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+    </a>
+    <div class="cabecalho-info">
+      <span class="cabecalho-titulo">Administração</span>
+      <span class="cabecalho-sub" id="quem">—</span>
+    </div>
+    <button class="btn-icone" id="btn-sair" aria-label="Sair">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+    </button>
+  </header>
+
+  <main class="conteudo">
+    <div class="abas">
+      <button class="aba ativa" data-painel="cadastro">Cadastro</button>
+      <button class="aba" data-painel="lojas">Lojas</button>
+      <button class="aba" data-painel="usuarios">Usuários</button>
+    </div>
+
+    <!-- ================= CADASTRO ================= -->
+    <section class="painel ativo" id="painel-cadastro">
+      <div class="cartao">
+        <div class="cartao-titulo">Cadastro em uso</div>
+        <div id="cadastro-atual" class="cartao-ajuda">Verificando…</div>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-titulo">Carregar cadastro novo</div>
+        <p class="cartao-ajuda">
+          O cadastro só muda quando você mandar. Enquanto a carga não termina, nada é
+          trocado — se der erro no meio, o cadastro atual continua inteiro.
+          Lotes já criados não se alteram.
+        </p>
+
+        <div class="campo">
+          <span class="rotulo">Relatório de níveis (um arquivo)</span>
+          <label class="solta" id="solta-niveis">
+            <input type="file" id="arq-niveis" accept=".txt,.tsv,.csv,text/plain" />
+            <div id="rotulo-niveis">Escolher o arquivo de níveis</div>
+          </label>
+        </div>
+
+        <div class="campo">
+          <span class="rotulo">Relatórios de EANs (pode escolher vários)</span>
+          <label class="solta" id="solta-eans">
+            <input type="file" id="arq-eans" accept=".txt,.tsv,.csv,text/plain" multiple />
+            <div id="rotulo-eans">Escolher os arquivos de EANs</div>
+          </label>
+        </div>
+
+        <div class="aviso aviso--neutro" id="andamento" hidden></div>
+        <div class="barra" id="barra" hidden><div class="barra-cheia" id="barra-cheia"></div></div>
+        <div class="aviso" id="resultado" hidden></div>
+
+        <button class="botao" id="btn-carregar" disabled>Ler e carregar</button>
+      </div>
+    </section>
+
+    <!-- ================= LOJAS ================= -->
+    <section class="painel" id="painel-lojas">
+      <div class="cartao">
+        <div class="cartao-titulo">Nova loja</div>
+        <div style="display: flex; gap: .5rem; flex-wrap: wrap">
+          <div class="campo" style="flex: 0 0 110px">
+            <label class="rotulo" for="loja-codigo">Código</label>
+            <input class="entrada" id="loja-codigo" inputmode="numeric" placeholder="317" />
+          </div>
+          <div class="campo" style="min-width: 180px">
+            <label class="rotulo" for="loja-nome">Nome</label>
+            <input class="entrada" id="loja-nome" placeholder="POSECOL UVARANAS" />
+          </div>
+        </div>
+        <div class="aviso aviso--erro" id="loja-erro" hidden></div>
+        <button class="botao" id="btn-nova-loja">Cadastrar loja</button>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-titulo">Lojas</div>
+        <div id="lista-lojas" style="display: flex; flex-direction: column; gap: .5rem"></div>
+      </div>
+    </section>
+
+    <!-- ================= USUÁRIOS ================= -->
+    <section class="painel" id="painel-usuarios">
+      <div class="cartao">
+        <div class="cartao-titulo">Novo usuário</div>
+        <div class="campo">
+          <label class="rotulo" for="usr-nome">Nome</label>
+          <input class="entrada" id="usr-nome" placeholder="JOÃO DA SILVA" autocomplete="off" />
+        </div>
+        <div class="campo">
+          <label class="rotulo" for="usr-senha">Senha (mínimo 6 caracteres)</label>
+          <input class="entrada" id="usr-senha" type="text" autocomplete="off" />
+        </div>
+        <label style="display: flex; align-items: center; gap: .5rem; min-height: 44px; cursor: pointer">
+          <input type="checkbox" id="usr-admin" style="width: 18px; height: 18px" />
+          <span>Também é administrador</span>
+        </label>
+        <div class="aviso aviso--erro" id="usr-erro" hidden></div>
+        <button class="botao" id="btn-novo-usuario">Cadastrar usuário</button>
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-titulo">Usuários</div>
+        <div id="lista-usuarios" style="display: flex; flex-direction: column; gap: .5rem"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="admin.js"></script>
+  <script src="pwa.js"></script>
+</body>
+</html>

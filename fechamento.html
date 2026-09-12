@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a6fd4" />
+  <title>Fechamento · Contagens</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="estilo.css" />
+  <style>
+    .numeros { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+    .numero {
+      background: var(--clr-surface-2); border-radius: var(--radius-md);
+      padding: .6rem .4rem; text-align: center;
+    }
+    .numero-valor { font-size: 1.15rem; font-weight: 700; }
+    .numero-rotulo { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--clr-text-secondary); margin-top: .15rem; }
+
+    .pessoa { display: flex; align-items: center; gap: .6rem; padding: .55rem 0; border-bottom: 1px solid var(--clr-border); }
+    .pessoa:last-child { border-bottom: 0; }
+    .pessoa-bola { width: 10px; height: 10px; border-radius: 999px; flex: none; }
+    .pessoa-nome { flex: 1; font-size: .92rem; font-weight: 600; }
+    .pessoa-quando { font-size: .78rem; color: var(--clr-text-secondary); }
+
+    .acoes { display: flex; flex-direction: column; gap: .5rem; }
+    .par { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+  </style>
+</head>
+<body>
+  <header class="cabecalho">
+    <a class="btn-icone" href="lotes.html" aria-label="Voltar">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <div class="cabecalho-info">
+      <span class="cabecalho-titulo" id="lote-nome">—</span>
+      <span class="cabecalho-sub" id="lote-loja">—</span>
+    </div>
+  </header>
+
+  <main class="conteudo">
+    <div class="aviso aviso--erro"   id="erro" hidden></div>
+    <div class="aviso aviso--ok"     id="recado" hidden></div>
+
+    <div class="cartao">
+      <div class="numeros">
+        <div class="numero"><div class="numero-valor" id="n-produtos">—</div><div class="numero-rotulo">Produtos</div></div>
+        <div class="numero"><div class="numero-valor" id="n-lancamentos">—</div><div class="numero-rotulo">Lançamentos</div></div>
+        <div class="numero"><div class="numero-valor" id="n-contadores">—</div><div class="numero-rotulo">Contadores</div></div>
+      </div>
+      <p class="cartao-ajuda" id="situacao" style="margin-top:.6rem">—</p>
+    </div>
+
+    <div class="secao-titulo">Quem está contando</div>
+    <div class="cartao" id="pessoas"><p class="cartao-ajuda">Carregando…</p></div>
+
+    <div class="secao-titulo" id="titulo-minha-parte">Minha parte</div>
+    <div class="cartao">
+      <p class="cartao-ajuda" id="minha-parte">—</p>
+      <div class="acoes" style="margin-top:.7rem">
+        <button class="botao" id="btn-finalizar" hidden>Finalizei minha contagem</button>
+        <button class="botao botao--fantasma" id="btn-voltar-contar" hidden>Voltar a contar</button>
+      </div>
+    </div>
+
+    <div class="secao-titulo" id="titulo-fechar" hidden>Fechar o inventário</div>
+    <div class="cartao" id="cartao-fechar" hidden>
+      <p class="cartao-ajuda" id="ajuda-fechar">—</p>
+      <div class="acoes" style="margin-top:.7rem">
+        <button class="botao botao--perigo" id="btn-fechar">Fechar e gerar os arquivos</button>
+      </div>
+    </div>
+
+    <div class="secao-titulo" id="titulo-arquivos" hidden>Arquivos</div>
+    <div class="cartao" id="cartao-arquivos" hidden>
+      <p class="cartao-ajuda" id="ajuda-arquivos">—</p>
+      <div class="acoes" style="margin-top:.7rem">
+        <div class="par">
+          <button class="botao" id="btn-txt">Baixar TXT</button>
+          <button class="botao" id="btn-csv">Baixar CSV</button>
+        </div>
+        <button class="botao botao--fantasma" id="btn-email">Enviar por e-mail</button>
+      </div>
+    </div>
+
+    <div class="secao-titulo" id="titulo-limpeza" hidden>Espaço no servidor</div>
+    <div class="cartao" id="cartao-limpeza" hidden>
+      <p class="cartao-ajuda" id="ajuda-limpeza">—</p>
+      <div class="acoes" style="margin-top:.7rem">
+        <button class="botao botao--perigo" id="btn-apagar-contagens">Apagar as contagens deste inventário</button>
+      </div>
+    </div>
+
+    <div class="secao-titulo" id="titulo-espaco" hidden>Espaço neste aparelho</div>
+    <div class="cartao" id="cartao-espaco" hidden>
+      <p class="cartao-ajuda" id="ajuda-espaco">—</p>
+      <div class="acoes" style="margin-top:.7rem">
+        <button class="botao botao--fantasma" id="btn-liberar">Apagar este inventário do aparelho</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="local.js"></script>
+  <script src="fechamento.js"></script>
+  <script src="pwa.js"></script>
+</body>
+</html>

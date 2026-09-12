@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a6fd4" />
+  <title>Criar inventário · Contagens</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="estilo.css" />
+  <style>
+    .no { border-left: 1px solid var(--clr-border); }
+    .no-linha {
+      display: flex; align-items: center; gap: .5rem;
+      min-height: 44px; padding: .2rem .4rem;
+      border-radius: var(--radius-sm);
+    }
+    .no-linha:hover { background: var(--clr-surface-2); }
+    .no-seta {
+      width: 26px; height: 26px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: transparent; color: var(--clr-text-secondary);
+      cursor: pointer; border-radius: 6px;
+    }
+    .no-seta[data-vazio="1"] { visibility: hidden; }
+    .no-caixa { width: 20px; height: 20px; flex-shrink: 0; cursor: pointer; accent-color: var(--clr-primary); }
+    .no-nome { flex: 1; min-width: 0; font-size: .95rem; }
+    .no-conta { font-size: .78rem; color: var(--clr-text-secondary); flex-shrink: 0; }
+    .no-filhos { margin-left: 1.1rem; display: none; }
+    .no-filhos.aberto { display: block; }
+    .marcado > .no-linha { background: rgba(26,111,212,.12); }
+    .resumo-fixo {
+      position: sticky; bottom: 0;
+      background: var(--clr-surface);
+      border-top: 1px solid var(--clr-border);
+      padding: .75rem 1rem;
+      display: flex; flex-direction: column; gap: .6rem;
+      box-shadow: 0 -4px 12px rgba(0,0,0,.12);
+    }
+  </style>
+</head>
+<body>
+  <header class="cabecalho">
+    <a class="btn-icone" href="lotes.html" aria-label="Voltar">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <div class="cabecalho-info">
+      <span class="cabecalho-titulo">Criar inventário</span>
+      <span class="cabecalho-sub" id="sub-loja">—</span>
+    </div>
+  </header>
+
+  <main class="conteudo">
+    <div class="cartao">
+      <div class="campo">
+        <label class="rotulo" for="nome">Nome do inventário</label>
+        <input class="entrada" id="nome" placeholder="CIGARROS E BEBIDAS" autocomplete="off" />
+      </div>
+      <p class="cartao-ajuda">
+        Esse nome vai no arquivo que o sistema importa: <span id="exemplo-arquivo">NOME_LOJA_DATA</span>.
+      </p>
+    </div>
+
+    <div class="aviso aviso--atencao" id="ja-aberto" hidden></div>
+
+    <div class="cartao">
+      <div class="cartao-titulo">Categorias a contar</div>
+      <p class="cartao-ajuda">
+        Marcar um galho marca tudo abaixo dele. O número ao lado é de produtos —
+        passe o dedo nele para ver quantos estão sem código de barras.
+      </p>
+      <input class="entrada" id="busca" placeholder="Procurar categoria…" autocomplete="off" />
+      <div id="arvore">Carregando a árvore…</div>
+    </div>
+
+    <div class="aviso aviso--erro" id="erro" hidden></div>
+  </main>
+
+  <div class="resumo-fixo">
+    <div id="resumo" class="cartao-ajuda">Nada marcado ainda.</div>
+    <button class="botao" id="btn-criar" disabled>Criar inventário</button>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="criar-lote.js"></script>
+  <script src="pwa.js"></script>
+</body>
+</html>

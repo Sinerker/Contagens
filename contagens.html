@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1a6fd4" />
+  <title>Contagem</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="estilo.css" />
+  <style>
+    body { overscroll-behavior: none; }
+    .cnt { display: flex; flex-direction: column; gap: .7rem; padding: .7rem; max-width: 560px; margin: 0 auto; }
+
+    .pilhas { display: flex; gap: .5rem; }
+    .pilha {
+      flex: 1; min-height: var(--touch-min);
+      display: flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-sm); border: 2px solid var(--clr-border);
+      background: var(--clr-surface); color: var(--clr-text-secondary);
+      font-size: 1rem; font-weight: 600; cursor: pointer; user-select: none;
+    }
+    .pilha.ativa {
+      border-color: var(--clr-primary); color: var(--clr-primary);
+      background: rgba(26,111,212,.12);
+    }
+
+    .local { display: flex; gap: .5rem; }
+    .local .campo { flex: 1; }
+    .local .campo:first-child { flex: 2; }
+
+    .produto {
+      padding: .75rem; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--clr-primary); background: var(--clr-surface-2);
+    }
+    .produto-seq { font-size: .82rem; font-weight: 700; color: var(--clr-primary); }
+    .produto-desc { font-size: 1rem; font-weight: 600; margin: .2rem 0; }
+    .produto-info { font-size: .85rem; color: var(--clr-text-secondary); }
+
+    .achados { display: flex; flex-direction: column; gap: .4rem; max-height: 260px; overflow-y: auto; }
+    .achado {
+      padding: .6rem .7rem; border-radius: var(--radius-sm);
+      border: 1px solid var(--clr-border); background: var(--clr-surface);
+      cursor: pointer;
+    }
+    .achado:hover { border-color: var(--clr-primary); }
+    .achado-desc { font-size: .92rem; font-weight: 600; }
+    .achado-info { font-size: .78rem; color: var(--clr-text-secondary); margin-top: .1rem; }
+
+    .qtd-linha { display: flex; gap: .5rem; align-items: flex-end; }
+    .entrada--qtd { font-size: 1.3rem; font-weight: 700; text-align: center; letter-spacing: .02em; }
+    .atalho {
+      min-height: var(--touch-min); display: flex; align-items: center; gap: .45rem;
+      padding: 0 .8rem; border-radius: var(--radius-sm);
+      border: 1.5px solid var(--clr-border); background: var(--clr-surface);
+      font-size: .88rem; font-weight: 600; color: var(--clr-text-secondary);
+      cursor: pointer; user-select: none; white-space: nowrap;
+    }
+    .atalho.ativo { border-color: var(--clr-primary); color: var(--clr-primary); background: rgba(26,111,212,.12); }
+    .atalho input { width: 18px; height: 18px; accent-color: var(--clr-primary); }
+
+    .ultimo {
+      border-radius: var(--radius-md); padding: .8rem;
+      background: rgba(26,111,212,.10); border: 1px solid rgba(26,111,212,.35);
+    }
+    .ultimo-rot { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
+    .ultimo-desc { font-size: .92rem; font-weight: 700; margin-top: .25rem; }
+    .ultimo-info { font-size: .8rem; opacity: .85; }
+
+    .aviso-flutuante {
+      position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+      padding: .6rem 1rem; border-radius: 10px; color: #fff; font-weight: 700;
+      font-size: .9rem; z-index: 999; box-shadow: var(--shadow-md); max-width: 92vw; text-align: center;
+    }
+
+    .selo-fila {
+      font-size: .72rem; font-weight: 700; padding: .15rem .45rem;
+      border-radius: 999px; background: rgba(255,255,255,.25); white-space: nowrap;
+    }
+
+    /* Selo da lista: fica sempre a vista, porque buscar num catalogo
+       pela metade e nao achar parece que o produto nao existe. */
+    .selo-lista {
+      font-size: .72rem; font-weight: 700; padding: .15rem .45rem;
+      border-radius: 999px; background: rgba(255,255,255,.25); white-space: nowrap;
+      border: 0; color: #fff; font-family: inherit; line-height: 1.3;
+    }
+
+    .tampa {
+      position: fixed; inset: 0; background: rgba(0,0,0,.55);
+      display: none; align-items: flex-end; justify-content: center; z-index: 1000;
+    }
+    .tampa.aberta { display: flex; }
+    .folha {
+      background: var(--clr-bg); width: 100%; max-width: 560px;
+      max-height: 86vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      display: flex; flex-direction: column;
+    }
+    .folha-topo {
+      display: flex; align-items: center; gap: .5rem; padding: .8rem;
+      border-bottom: 1px solid var(--clr-border);
+    }
+    .folha-corpo { overflow-y: auto; padding: .8rem; display: flex; flex-direction: column; gap: .5rem; }
+
+    .lanc { padding: .6rem .7rem; border-radius: var(--radius-sm);
+            border: 1px solid var(--clr-border); background: var(--clr-surface); }
+    .lanc.cancelada { opacity: .5; text-decoration: line-through; }
+    .lanc-topo { display: flex; gap: .5rem; align-items: baseline; }
+    .lanc-desc { flex: 1; font-size: .9rem; font-weight: 600; }
+    .lanc-qtd { font-size: 1rem; font-weight: 700; }
+    .lanc-info { font-size: .76rem; color: var(--clr-text-secondary); margin-top: .15rem; }
+    .lanc-acoes { display: flex; gap: .4rem; margin-top: .5rem; }
+  </style>
+</head>
+<body>
+  <header class="cabecalho">
+    <a class="btn-icone" href="lotes.html" aria-label="Voltar">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <div class="cabecalho-info">
+      <span class="cabecalho-titulo" id="lote-nome">—</span>
+      <span class="cabecalho-sub"><span id="lote-conta">0 contagens</span> <button type="button" class="selo-lista" id="selo-lista" hidden></button> <span class="selo-fila" id="selo-fila" hidden></span></span>
+    </div>
+    <button class="btn-icone" id="btn-lista" aria-label="Ver contagens">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+    </button>
+    <button class="btn-icone" id="btn-tela" aria-label="Tela cheia">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+    </button>
+  </header>
+
+  <main class="cnt">
+    <div class="aviso aviso--neutro" id="baixando" hidden></div>
+    <div class="barra" id="barra" hidden><div class="barra-cheia" id="barra-cheia"></div></div>
+
+    <div class="pilhas">
+      <div class="pilha ativa" data-tipo="loja">Loja</div>
+      <div class="pilha" data-tipo="deposito">Depósito</div>
+    </div>
+
+    <div class="cartao" style="padding:.75rem">
+      <div class="local">
+        <div class="campo">
+          <label class="rotulo" for="corredor">Corredor</label>
+          <input class="entrada" id="corredor" inputmode="text" autocomplete="off" />
+        </div>
+        <div class="campo">
+          <label class="rotulo" for="coluna">Coluna</label>
+          <select class="lista" id="coluna"></select>
+        </div>
+        <div class="campo">
+          <label class="rotulo" for="andar">Andar</label>
+          <select class="lista" id="andar"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="campo">
+      <label class="rotulo" for="codigo">Código de barras, nome ou código do sistema</label>
+      <input class="entrada" id="codigo" inputmode="text" autocomplete="off" enterkeyhint="search" />
+    </div>
+
+    <div id="resultado"></div>
+
+    <div class="aviso aviso--atencao" id="ja-contado" hidden></div>
+
+    <div class="qtd-linha">
+      <div class="campo">
+        <label class="rotulo" for="quantidade">Quantidade</label>
+        <input class="entrada entrada--qtd" id="quantidade" inputmode="decimal" autocomplete="off" enterkeyhint="done" />
+      </div>
+      <label class="atalho" id="atalho-um">
+        <input type="checkbox" id="qtde1" />
+        QTDE 1
+      </label>
+    </div>
+
+    <div id="ultimo"></div>
+  </main>
+
+  <div class="tampa" id="tampa">
+    <div class="folha">
+      <div class="folha-topo">
+        <input class="entrada" id="busca-lanc" placeholder="Procurar no que já foi contado…" autocomplete="off" />
+        <button class="btn-icone" id="btn-fechar" style="color:var(--clr-text)" aria-label="Fechar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="folha-corpo" id="lista-lanc"></div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="local.js"></script>
+  <script src="contagens.js"></script>
+  <script src="pwa.js"></script>
+</body>
+</html>

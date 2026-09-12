@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a6fd4" />
+  <title>Contagens</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+  <header class="cabecalho">
+    <div class="btn-icone" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="8" y1="14" x2="16" y2="14" />
+      </svg>
+    </div>
+    <div class="cabecalho-info">
+      <span class="cabecalho-titulo">Contagens</span>
+      <span class="cabecalho-sub" id="sub-cadastro">Carregando…</span>
+    </div>
+  </header>
+
+  <main class="conteudo" style="max-width: 460px">
+    <form class="cartao" id="form-entrar" autocomplete="off">
+      <div class="campo">
+        <label class="rotulo" for="usuario">Usuário</label>
+        <select class="lista" id="usuario" required></select>
+      </div>
+
+      <div class="campo">
+        <label class="rotulo" for="loja">Loja</label>
+        <select class="lista" id="loja"></select>
+      </div>
+
+      <div class="campo">
+        <label class="rotulo" for="senha">Senha</label>
+        <input class="entrada" type="password" id="senha" required
+               autocomplete="current-password" inputmode="text" />
+      </div>
+
+      <div class="aviso aviso--erro" id="erro" hidden></div>
+
+      <button class="botao" type="submit" id="btn-entrar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" />
+        </svg>
+        Entrar
+      </button>
+    </form>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="index.js"></script>
+  <script src="pwa.js"></script>
+</body>
+</html>

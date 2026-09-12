@@ -1,0 +1,17 @@
+# Dados da empresa não vão para o repositório. Ele é público:
+# qualquer pessoa na internet lê o que estiver aqui dentro.
+*.xlsx
+*.xls
+*.csv
+*.txt
+!README.txt
+
+# Relatórios do sistema, se alguém copiar para cá sem querer
+niveis*.txt
+EANS*.txt
+NIVEIS*.txt
+
+# Lixo de sistema
+Thumbs.db
+desktop.ini
+.DS_Store
