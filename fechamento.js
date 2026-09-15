@@ -386,7 +386,12 @@ async function desenharLimpeza() {
     ? `Neste aparelho: ${guarda.join(" e ")}.`
     : "Este aparelho não guarda mais nada deste inventário.";
 
-  if (!lote.enviado_em) {
+  // O e-mail é exigido enquanto houver o que perder. Inventário sem nenhum
+  // lançamento — porque ninguém contou, ou porque já foram apagados antes —
+  // não tem arquivo para proteger.
+  const temOQuePerder = !apagado() && Number(lote.lancamentos || 0) > 0;
+
+  if (temOQuePerder && !lote.enviado_em) {
     $("ajuda-limpeza").innerHTML =
       `<b>Só dá para apagar depois que o e-mail sair.</b> Os arquivos não ficam guardados no servidor — ` +
       `eles são montados na hora, a partir dos lançamentos. Enquanto o e-mail não for enviado, apagar ` +
@@ -405,6 +410,16 @@ async function desenharLimpeza() {
     return;
   }
 
+  if (!temOQuePerder) {
+    $("ajuda-limpeza").innerHTML = apagado()
+      ? `As contagens deste inventário já foram apagadas em <b>${quando(lote.contagens_apagadas_em)}</b>. ` +
+        `Sobrou só a casca dele aqui — apagar tira ela da lista de vez.`
+      : `Este inventário não tem nenhum lançamento. Não há arquivo para proteger, então pode ser apagado direto.`;
+    btn.disabled = false;
+    btn.textContent = "Apagar este inventário";
+    return;
+  }
+
   const faltam = 7 - diasDesde(lote.enviado_em);
   $("ajuda-limpeza").innerHTML =
     `Enviado por e-mail em <b>${quando(lote.enviado_em)}</b>. ` +
@@ -417,13 +432,14 @@ async function desenharLimpeza() {
 }
 
 async function apagarInventario() {
-  if (!lote.enviado_em) return;   // o botão já está travado, mas não custa
 
+  const temOQuePerder = !apagado() && Number(lote.lancamentos || 0) > 0;
   if (!confirm(
     `Apagar o inventário "${lote.nome}" de vez?\n\n` +
     `Sai do servidor e deste aparelho: os lançamentos, a lista de produtos e o próprio inventário.\n\n` +
-    `O TXT e o CSV já foram para o seu e-mail em ${quando(lote.enviado_em)} — depois de apagar, ` +
-    `eles não podem mais ser gerados por ninguém. Isso não tem volta.`
+    (temOQuePerder
+      ? `O TXT e o CSV já foram para o seu e-mail em ${quando(lote.enviado_em)} — depois de apagar, eles não podem mais ser gerados por ninguém. Isso não tem volta.`
+      : `Este inventário não tem mais lançamentos, então não há arquivo a perder.`)
   )) return;
 
   const btn = $("btn-apagar-inventario");
