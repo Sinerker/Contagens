@@ -84,8 +84,7 @@ async function carregar() {
   await desenharMinhaParte();
   desenharFechar();
   desenharArquivos();
-  desenharLimpeza();
-  await desenharEspaco();
+  await desenharLimpeza();
 }
 
 function desenharPessoas() {
@@ -358,112 +357,94 @@ async function enviarEmail() {
   }
 }
 
-/* ---------- espaço no servidor ---------- */
-// Os arquivos não ficam guardados: são montados na hora, a partir das
-// contagens. Então apagar as contagens é apagar a possibilidade de gerar os
-// arquivos de novo — por isso a tela insiste no e-mail antes.
+/* ---------- apagar o inventário ---------- */
+// Uma ação só, e ela leva tudo: os lançamentos e o inventário no servidor,
+// e a lista e as contagens neste aparelho. O TXT e o CSV não ficam guardados
+// em lugar nenhum — são montados na hora, a partir dos lançamentos. Então
+// apagar é apagar a possibilidade de gerar os arquivos de novo, e por isso
+// existe uma única condição, sem exceção: o e-mail precisa ter saído.
 function diasDesde(iso) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
-function desenharLimpeza() {
+async function desenharLimpeza() {
   const mostrar = lote.status === "fechado";
   $("titulo-limpeza").hidden = !mostrar;
   $("cartao-limpeza").hidden = !mostrar;
   if (!mostrar) return;
 
-  const btn = $("btn-apagar-contagens");
+  const btn = $("btn-apagar-inventario");
 
-  if (apagado()) {
+  // O que este aparelho ainda guarda deste inventário
+  const estado = await LOCAL.estado(loteId);
+  const locais = await LOCAL.doLote(loteId);
+  const pendentes = locais.filter((c) => !c.enviado).length;
+  const guarda = [];
+  if (estado.baixados > 0) guarda.push(`a lista de ${numero(estado.baixados)} produtos`);
+  if (locais.length > 0) guarda.push(`${numero(locais.length)} contagem(ns)`);
+  $("ajuda-espaco").textContent = guarda.length
+    ? `Neste aparelho: ${guarda.join(" e ")}.`
+    : "Este aparelho não guarda mais nada deste inventário.";
+
+  if (!lote.enviado_em) {
     $("ajuda-limpeza").innerHTML =
-      `Já apagado em <b>${quando(lote.contagens_apagadas_em)}</b>. ` +
-      `O inventário continua na lista com o tamanho dele (${numero(lote.itens)} produtos, ${numero(lote.lancamentos)} lançamentos), ` +
-      `mas os lançamentos em si não existem mais no servidor.`;
-    btn.hidden = true;
+      `<b>Só dá para apagar depois que o e-mail sair.</b> Os arquivos não ficam guardados no servidor — ` +
+      `eles são montados na hora, a partir dos lançamentos. Enquanto o e-mail não for enviado, apagar ` +
+      `deixaria você sem o TXT e sem o CSV, sem volta. Envie acima e o botão libera.`;
+    btn.disabled = true;
+    btn.textContent = "Apagar (bloqueado até enviar o e-mail)";
     return;
   }
 
-  btn.hidden = false;
-
-  if (lote.enviado_em) {
-    const faltam = 7 - diasDesde(lote.enviado_em);
+  if (pendentes > 0) {
     $("ajuda-limpeza").innerHTML =
-      `Enviado por e-mail em <b>${quando(lote.enviado_em)}</b>. ` +
-      (faltam > 0
-        ? `As contagens serão apagadas sozinhas daqui a ${faltam} dia(s), liberando espaço no servidor. `
-        : `As contagens já passaram dos 7 dias e serão apagadas na próxima limpeza da madrugada. `) +
-      `Se quiser liberar agora, pode apagar aqui.`;
-    btn.textContent = "Apagar as contagens agora";
-  } else {
-    $("ajuda-limpeza").innerHTML =
-      `<b>Este inventário ainda não foi enviado por e-mail.</b> Enquanto não for, nada é apagado sozinho — ` +
-      `é essa a garantia de que você não fica sem o arquivo. Envie acima e a limpeza automática assume daqui a 7 dias.`;
-    btn.textContent = "Apagar mesmo sem ter enviado";
+      `<b>${numero(pendentes)} contagem(ns) deste aparelho ainda não subiram.</b> ` +
+      `Apagar agora perderia essas. Conecte à internet e espere a fila esvaziar.`;
+    btn.disabled = true;
+    btn.textContent = "Apagar (aguardando a fila subir)";
+    return;
   }
+
+  const faltam = 7 - diasDesde(lote.enviado_em);
+  $("ajuda-limpeza").innerHTML =
+    `Enviado por e-mail em <b>${quando(lote.enviado_em)}</b>. ` +
+    (faltam > 0
+      ? `Se você não fizer nada, ele é apagado sozinho daqui a ${faltam} dia(s). `
+      : `Já passou dos 7 dias — vai ser apagado na próxima limpeza da madrugada. `) +
+    `Apagar agora tira ele do servidor e deste aparelho de uma vez.`;
+  btn.disabled = false;
+  btn.textContent = "Apagar este inventário";
 }
 
-async function apagarContagens() {
-  const semEmail = !lote.enviado_em;
-  const pergunta = semEmail
-    ? `Apagar as contagens SEM ter enviado por e-mail?\n\nDepois disso o TXT e o CSV deste inventário não podem mais ser gerados, por ninguém. Isso não tem volta.`
-    : `Apagar as ${numero(lote.lancamentos)} contagens deste inventário do servidor?\n\nOs arquivos já saíram por e-mail em ${quando(lote.enviado_em)}. Depois de apagar, eles não podem mais ser gerados aqui.`;
-  if (!confirm(pergunta)) return;
+async function apagarInventario() {
+  if (!lote.enviado_em) return;   // o botão já está travado, mas não custa
 
-  const btn = $("btn-apagar-contagens");
+  if (!confirm(
+    `Apagar o inventário "${lote.nome}" de vez?\n\n` +
+    `Sai do servidor e deste aparelho: os lançamentos, a lista de produtos e o próprio inventário.\n\n` +
+    `O TXT e o CSV já foram para o seu e-mail em ${quando(lote.enviado_em)} — depois de apagar, ` +
+    `eles não podem mais ser gerados por ninguém. Isso não tem volta.`
+  )) return;
+
+  const btn = $("btn-apagar-inventario");
   btn.disabled = true;
   btn.textContent = "Apagando…";
   erro("");
+
   try {
-    const r = await API.rpc("apagar_contagens", { p_lote: loteId, p_forcar: semEmail });
-    recado(r.ja_estava_apagado
-      ? "Este inventário já estava apagado."
-      : `${numero(r.apagadas)} contagem(ns) apagadas do servidor.`);
-    arquivos = null;
-    await carregar();
+    // Servidor primeiro: se ele recusar, o aparelho fica intacto.
+    const r = await API.rpc("apagar_inventario", { p_lote: loteId });
+    // Só então o aparelho.
+    try { await LOCAL.esquecerLote(loteId); } catch (_) {
+      await LOCAL.limparPacotes(loteId);
+    }
+    sessionStorage.removeItem("loteAtivo");
+    sessionStorage.setItem("recado", `<b>${r.nome}</b> foi apagado do servidor e deste aparelho.`);
+    location.href = "lotes.html";
   } catch (e) {
     erro(API.erro(e));
     btn.disabled = false;
-    desenharLimpeza();
-  }
-}
-
-/* ---------- espaço no aparelho ---------- */
-async function desenharEspaco() {
-  const estado = await LOCAL.estado(loteId);
-  const contagens = await LOCAL.doLote(loteId);
-  const pendentes = contagens.filter((c) => !c.enviado).length;
-  const temAlgo = estado.baixados > 0 || contagens.length > 0;
-
-  $("titulo-espaco").hidden = !temAlgo;
-  $("cartao-espaco").hidden = !temAlgo;
-  if (!temAlgo) return;
-
-  const partes = [];
-  if (estado.baixados > 0) partes.push(`a lista de ${numero(estado.baixados)} produtos`);
-  if (contagens.length > 0) partes.push(`${numero(contagens.length)} contagem(ns)`);
-
-  const btn = $("btn-liberar");
-  if (pendentes > 0) {
-    $("ajuda-espaco").innerHTML =
-      `Este aparelho guarda ${partes.join(" e ")}. <b>${numero(pendentes)} ainda não subiu</b>, ` +
-      `então não dá para apagar nada agora.`;
-    btn.disabled = true;
-  } else {
-    $("ajuda-espaco").textContent =
-      `Este aparelho guarda ${partes.join(" e ")}. Tudo já está no servidor, então apagar daqui não perde nada — ` +
-      `e é o que libera o espaço para o próximo inventário.`;
-    btn.disabled = false;
-  }
-}
-
-async function liberar() {
-  if (!confirm("Apagar este inventário deste aparelho? Tudo já está no servidor; isso só libera espaço aqui.")) return;
-  try {
-    await LOCAL.esquecerLote(loteId);
-    recado("Espaço liberado neste aparelho.");
-    await carregar();
-  } catch (e) {
-    erro(e.message);
+    await desenharLimpeza();
   }
 }
 
@@ -474,8 +455,7 @@ $("btn-fechar").addEventListener("click", fechar);
 $("btn-txt").addEventListener("click", baixarTxt);
 $("btn-csv").addEventListener("click", baixarCsv);
 $("btn-email").addEventListener("click", enviarEmail);
-$("btn-liberar").addEventListener("click", liberar);
-$("btn-apagar-contagens").addEventListener("click", apagarContagens);
+$("btn-apagar-inventario").addEventListener("click", apagarInventario);
 
 /* ---------- início ---------- */
 (async function iniciar() {
