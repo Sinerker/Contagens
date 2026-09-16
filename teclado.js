@@ -96,16 +96,31 @@
            e.code === "Delete" || e.keyCode === 46;
   }
 
-  // Enquanto o IME do Android ainda está grudado no campo — o que acontece
-  // na primeira vez que ele recebe o foco — a mesma tecla chega duas vezes,
-  // e o número saía dobrado. Dois toques de verdade, ou o leitor mandando
-  // "11", nunca dividem o mesmo carimbo de tempo; um eco do IME, sim.
-  var ultimoCarimbo = -1, ultimaTecla = null;
-  function ehEco(e) {
-    if (e.timeStamp === ultimoCarimbo && e.key === ultimaTecla) return true;
-    ultimoCarimbo = e.timeStamp;
-    ultimaTecla = e.key;
-    return false;
+  // O coletor tem DOIS caminhos de entrada ligados ao mesmo tempo, e cada
+  // tecla física chega duas vezes. Medido no aparelho, um toque na tecla 4:
+  //
+  //   13:03:50.698  keydown  key "4"  code ""        keyCode 52   <- IME
+  //   13:03:50.719  keydown  key "4"  code "Digit4"  keyCode 52   <- teclado
+  //
+  // Os carimbos de tempo são DIFERENTES (22 ms), então não dá para separar
+  // por tempo — foi assim que a primeira tentativa falhou. O que separa é o
+  // "code": o IME manda vazio, o teclado físico manda o código da tecla.
+  //
+  // A regra abaixo só descarta quando a assinatura é exatamente essa: mesma
+  // tecla, menos de 80 ms, a anterior SEM code e esta COM code. Assim o leitor
+  // mandando "11" de verdade (as duas com code) continua escrevendo os dois —
+  // descartar um dígito de contagem seria pior que a duplicação.
+  var ult = { tecla: null, carimbo: -1, comCode: false };
+  function ehCopia(e) {
+    var comCode = !!e.code;
+    var copia =
+      e.key === ult.tecla &&
+      (e.timeStamp === ult.carimbo ||
+       (e.timeStamp - ult.carimbo < 80 && comCode && !ult.comCode));
+    ult.tecla = e.key;
+    ult.carimbo = e.timeStamp;
+    ult.comCode = comCode;
+    return copia;
   }
 
   // Captura: precisa chegar antes de qualquer outro. Enter e Tab
@@ -121,7 +136,7 @@
     if (e.isComposing || e.keyCode === 229) return;
 
     if (e.key === "Enter" || e.key === "Tab") return;
-    if (ehEco(e)) { e.preventDefault(); return; }
+    if (ehCopia(e)) { e.preventDefault(); return; }
 
     if (ehApagar(e)) { e.preventDefault(); apagar(c); return; }
     if (ehLimparTudo(e)) { e.preventDefault(); if (!travado(c)) c.value = ""; return; }
