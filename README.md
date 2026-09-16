@@ -44,6 +44,7 @@ Substitui o InventarioPostos, que continua no ar até a migração.
 | `lotes.html` / `lotes.js` | Os inventários da loja |
 | `criar-lote.html` / `criar-lote.js` | Árvore de categorias |
 | `contagens.html` / `contagens.js` | A tela do coletor, offline |
+| `teclado.js` | O teclado da tela de contagem, no lugar do teclado do Android |
 | `fechamento.html` / `fechamento.js` | Finalizar, fechar e entregar |
 | `admin.html` / `admin.js` | Cadastro do sistema, lojas e usuários |
 | `local.js` | Banco do aparelho, índices de busca e fila de envio |
@@ -68,8 +69,15 @@ Precisa ser localhost ou HTTPS, senão o Service Worker não funciona.
 
 ## Publicar
 
-Clique em `PUBLICAR.bat`. Depois, no GitHub: Settings → Pages → Branch `main`,
-pasta `/ (root)` → Save.
+O site sai do próprio repositório: o GitHub Pages já está ligado em
+Settings → Pages → Branch `main`, pasta `/ (root)`. Publicar é só mandar os
+arquivos para lá — `git push`, ou pelo site do GitHub, em Add file → Upload
+files. Cada envio reconstrói a página sozinho.
+
+Ao mexer em qualquer arquivo do site, **mude a versão no topo do `sw.js`**
+(`contagens-v14` → `v15`). É ela que faz o coletor largar o que estava
+guardado e baixar o novo; sem isso o aparelho continua abrindo a versão
+velha, mesmo com o GitHub já atualizado.
 
 O repositório é público, então **nada de dado da empresa entra nele** — o
 `.gitignore` já barra planilhas, CSVs e os relatórios do sistema. A chave que

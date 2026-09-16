@@ -11,14 +11,14 @@
    novo seria pior que erro de conexão.
    ============================================= */
 
-const VERSAO = "contagens-v10";
+const VERSAO = "contagens-v14";
 
 const ARQUIVOS = [
   "./",
   "index.html", "index.js",
   "lotes.html", "lotes.js",
   "criar-lote.html", "criar-lote.js",
-  "contagens.html", "contagens.js",
+  "contagens.html", "contagens.js", "teclado.js",
   "fechamento.html", "fechamento.js",
   "admin.html", "admin.js", "cadastro-worker.js",
   "api.js", "config.js", "local.js", "pwa.js",
