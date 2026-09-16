@@ -75,7 +75,7 @@ arquivos para lá — `git push`, ou pelo site do GitHub, em Add file → Upload
 files. Cada envio reconstrói a página sozinho.
 
 Ao mexer em qualquer arquivo do site, **mude a versão no topo do `sw.js`**
-(`contagens-v14` → `v15`). É ela que faz o coletor largar o que estava
+(basta somar 1 no número do fim). É ela que faz o coletor largar o que estava
 guardado e baixar o novo; sem isso o aparelho continua abrindo a versão
 velha, mesmo com o GitHub já atualizado.
 

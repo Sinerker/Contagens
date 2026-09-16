@@ -217,6 +217,44 @@
 
   document.body.appendChild(caixa);
 
+  /* ---------- 4b. o apagar da quantidade ---------- */
+  // A tecla de apagar do coletor não chega ao navegador: o Android a consome
+  // antes, e nem keydown nem beforeinput acontecem. Testado no aparelho, com
+  // os quatro tipos de evento escutados — não há o que interceptar. Então o
+  // apagar da quantidade tem de estar na tela.
+  (function () {
+    var linha = quantidade.closest(".qtd-linha");
+    var atalho = document.getElementById("atalho-um");
+    if (!linha) return;
+
+    var estiloQtd = document.createElement("style");
+    estiloQtd.textContent = [
+      ".tecla-apagar{min-height:var(--touch-min);min-width:56px;display:flex;",
+        "align-items:center;justify-content:center;padding:0 .7rem;",
+        "border-radius:var(--radius-sm);border:1.5px solid var(--clr-border);",
+        "background:var(--clr-surface);color:var(--clr-text-secondary);",
+        "font-size:18px;font-weight:700;user-select:none;-webkit-user-select:none;",
+        "touch-action:manipulation;flex:none}",
+      ".tecla-apagar:active{border-color:var(--clr-primary);color:var(--clr-primary);",
+        "background:rgba(26,111,212,.12)}"
+    ].join("");
+    document.head.appendChild(estiloQtd);
+
+    var b = document.createElement("div");
+    b.className = "tecla-apagar";
+    b.id = "apagar-quantidade";
+    b.setAttribute("aria-label", "Apagar um dígito da quantidade");
+    b.textContent = "⌫";
+    // Mesmo cuidado das outras teclas: o toque não pode tirar o foco do campo.
+    prender(b, function () {
+      apagar(quantidade);
+      if (document.activeElement !== quantidade) quantidade.focus();
+    });
+
+    if (atalho) linha.insertBefore(b, atalho);
+    else linha.appendChild(b);
+  })();
+
   /* ---------- 5. quando aparece ---------- */
   // O botão Voltar do aparelho tem de esconder o teclado antes de sair da
   // tela: sair no meio de uma contagem por causa de um toque é perda de
