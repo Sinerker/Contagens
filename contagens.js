@@ -765,7 +765,10 @@ $("quantidade").addEventListener("keydown", (e) => {
 
 $("qtde1").addEventListener("change", (e) => {
   $("atalho-um").classList.toggle("ativo", e.target.checked);
-  $("quantidade").readOnly = e.target.checked;
+  // A quantidade vive readonly — o teclado.js é quem escreve nela, para
+  // o Android não subir o teclado dele. Então a trava do QTDE 1 não pode
+  // mais ser o readOnly: é esta marca que o teclado.js respeita.
+  $("quantidade").dataset.travado = e.target.checked ? "1" : "";
   $("quantidade").value = e.target.checked ? "1" : "";
   focarCodigo();
 });
