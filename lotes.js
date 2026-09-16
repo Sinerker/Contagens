@@ -119,8 +119,55 @@ async function listar() {
     );
 
     marcarBaixados([...abertos, ...fechados]);
+    limparOrfaos();
   } catch (e) {
     elA.innerHTML = `<p class="cartao-ajuda">Não consegui listar: ${e.message}</p>`;
+  }
+}
+
+// Inventário apagado no servidor por outra pessoa deixa lixo neste aparelho:
+// a lista de produtos, que são megabytes, e contagens que já subiram. Aqui o
+// aparelho se limpa sozinho — é o que faz "apagar o inventário" valer para
+// todos os coletores, não só para quem clicou no botão.
+async function limparOrfaos() {
+  if (typeof LOCAL === "undefined") return;
+  try {
+    const locais = await LOCAL.lotes();
+    const ids = locais.map((l) => l.id).filter((id) => id > 0);
+    if (!ids.length) return;
+
+    const vivos = await API.selecionar("lote_resumo", `select=id&id=in.(${ids.join(",")})`);
+    const conjunto = new Set(vivos.map((v) => v.id));
+    const sumiram = ids.filter((id) => !conjunto.has(id));
+    if (!sumiram.length) return;
+
+    let limpos = 0, comPendentes = 0;
+    for (const id of sumiram) {
+      try {
+        await LOCAL.esquecerLote(id);
+        limpos++;
+      } catch (_) {
+        // Tem contagem que nunca subiu. O inventário não existe mais, então
+        // ela não tem para onde ir — mas apagar sem avisar seria pior.
+        // Solta só a lista de produtos, que é o que pesa.
+        await LOCAL.limparPacotes(id);
+        comPendentes++;
+      }
+    }
+
+    if (comPendentes > 0) {
+      const el = document.getElementById("aviso-armazenamento");
+      if (el) {
+        el.textContent =
+          `${comPendentes} inventário(s) guardados neste aparelho foram apagados no servidor, mas ainda têm contagens que nunca subiram. ` +
+          `Liberei a lista de produtos deles; as contagens continuam aqui.`;
+        el.hidden = false;
+      }
+    } else if (limpos > 0) {
+      console.info(`${limpos} inventário(s) apagados no servidor foram limpos deste aparelho.`);
+    }
+  } catch (_) {
+    // Sem internet não dá para saber o que ainda existe. Tenta na próxima.
   }
 }
 

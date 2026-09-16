@@ -94,6 +94,14 @@ const LOCAL = (() => {
       return promessa(t.objectStore("lote").get(Number(id)));
     },
 
+    // Todos os inventários que este aparelho guarda. O de número zero é o
+    // cadastro completo, não um inventário — fica de fora.
+    async lotes() {
+      const t = await tx(["lote"], "readonly");
+      const todos = await promessa(t.objectStore("lote").getAll());
+      return todos.filter((l) => l && Number(l.id) > 0);
+    },
+
     async estado(loteId) {
       const l = await this.lote(loteId);
       return {
