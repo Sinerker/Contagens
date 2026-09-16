@@ -15,3 +15,7 @@ NIVEIS*.txt
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Desenho das telas: fica só no computador
+design/
+teste-teclado/
