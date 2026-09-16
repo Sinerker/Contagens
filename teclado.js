@@ -84,6 +84,30 @@
   }
 
   /* ---------- 3. teclas físicas e leitor ---------- */
+
+  // O coletor não nomeia as teclas como um teclado de PC: a tecla de
+  // apagar dele não chegava como "Backspace", e por isso não apagava
+  // nada. Vale o código numérico também, que é o que não muda.
+  function ehApagar(e) {
+    return e.key === "Backspace" || e.code === "Backspace" || e.keyCode === 8;
+  }
+  function ehLimparTudo(e) {
+    return e.key === "Delete" || e.key === "Clear" ||
+           e.code === "Delete" || e.keyCode === 46;
+  }
+
+  // Enquanto o IME do Android ainda está grudado no campo — o que acontece
+  // na primeira vez que ele recebe o foco — a mesma tecla chega duas vezes,
+  // e o número saía dobrado. Dois toques de verdade, ou o leitor mandando
+  // "11", nunca dividem o mesmo carimbo de tempo; um eco do IME, sim.
+  var ultimoCarimbo = -1, ultimaTecla = null;
+  function ehEco(e) {
+    if (e.timeStamp === ultimoCarimbo && e.key === ultimaTecla) return true;
+    ultimoCarimbo = e.timeStamp;
+    ultimaTecla = e.key;
+    return false;
+  }
+
   // Captura: precisa chegar antes de qualquer outro. Enter e Tab
   // passam direto — Enter é o que busca o produto e grava a
   // contagem, e isso continua sendo do contagens.js.
@@ -91,10 +115,16 @@
     var c = document.activeElement;
     if (NOSSOS.indexOf(c) === -1) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
-    if (e.key === "Enter" || e.key === "Tab") return;
 
-    if (e.key === "Backspace") { e.preventDefault(); apagar(c); return; }
-    if (e.key === "Delete") { e.preventDefault(); if (!travado(c)) c.value = ""; return; }
+    // 229 é o aviso "quem manda nesta tecla é o IME". Não é caractere
+    // nenhum, e o campo é readonly, então o IME não escreve nada.
+    if (e.isComposing || e.keyCode === 229) return;
+
+    if (e.key === "Enter" || e.key === "Tab") return;
+    if (ehEco(e)) { e.preventDefault(); return; }
+
+    if (ehApagar(e)) { e.preventDefault(); apagar(c); return; }
+    if (ehLimparTudo(e)) { e.preventDefault(); if (!travado(c)) c.value = ""; return; }
     if (!e.key || e.key.length !== 1) return;   // setas, F1, Shift…
 
     e.preventDefault();
@@ -188,12 +218,44 @@
   document.body.appendChild(caixa);
 
   /* ---------- 5. quando aparece ---------- */
+  // O botão Voltar do aparelho tem de esconder o teclado antes de sair da
+  // tela: sair no meio de uma contagem por causa de um toque é perda de
+  // trabalho. O jeito de ouvir esse botão na web é este — enquanto o
+  // teclado está aberto, deixamos um passo nosso no histórico; o Voltar
+  // gasta esse passo, e só o segundo Voltar sai da página.
+  var nossoPasso = false;   // temos um passo no histórico
+  var fechandoAqui = false; // fomos nós que desfizemos, não o usuário
+
   function abrir(sim) {
     caixa.classList.toggle("aberto", sim);
     document.body.classList.toggle("com-teclado", sim);
+
+    if (sim) {
+      if (!nossoPasso) {
+        try { history.pushState({ teclado: 1 }, ""); nossoPasso = true; } catch (_) {}
+      }
+    } else if (nossoPasso) {
+      nossoPasso = false;
+      fechandoAqui = true;
+      try { history.back(); } catch (_) { fechandoAqui = false; }
+    }
   }
 
+  window.addEventListener("popstate", function () {
+    if (fechandoAqui) { fechandoAqui = false; return; }  // desfeito por nós
+    if (!nossoPasso) return;                             // não era nosso: deixa voltar
+    nossoPasso = false;
+    // Esconde o teclado e MANTÉM o foco no campo: assim o leitor continua
+    // bipando e o teclado físico continua digitando, só a tela fica livre.
+    caixa.classList.remove("aberto");
+    document.body.classList.remove("com-teclado");
+  });
+
   codigo.addEventListener("focus", function () { abrir(true); });
+
+  // Depois que o Voltar escondeu o teclado, o campo continua focado — então
+  // um toque nele não gera "focus" nenhum. Sem isto, o teclado não voltava.
+  codigo.addEventListener("click", function () { abrir(true); });
   codigo.addEventListener("blur", function () {
     // O teclado não tira o foco (preventDefault acima), então um
     // blur de verdade é a pessoa saindo do campo.
