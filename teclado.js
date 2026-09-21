@@ -152,13 +152,28 @@
     }
   }, true);
 
-  /* ---------- 4. o teclado de letras ---------- */
-  var FILAS = [
-    { teclas: "QWERTYUIOP" },
-    { teclas: "ASDFGHJKL" },
-    { teclas: "ZXCVBNM", extras: ["apagar"] },
-    { extras: ["espaco"] }
-  ];
+  /* ---------- 4. os teclados da tela ---------- */
+  // Dois teclados no mesmo campo: letras e números. O físico do coletor só
+  // tem números, então as letras precisam estar na tela; e o numérico da tela
+  // existe para quem prefere não tirar a mão do vidro. A tecla de alternância
+  // troca um pelo outro sem sair do campo.
+  //
+  // Os dois têm as MESMAS quatro linhas de altura, de propósito: alternar não
+  // pode fazer a tela pular, senão o dedo erra o alvo que estava mirando.
+  var TECLADOS = {
+    letras: [
+      { teclas: "QWERTYUIOP" },
+      { teclas: "ASDFGHJKL" },
+      { teclas: "ZXCVBNM", extras: ["apagar"] },
+      { extras: ["paraNumeros", "espaco", "enter"] }
+    ],
+    numeros: [
+      { teclas: "123", extras: ["apagar"] },
+      { teclas: "456", extras: ["paraLetras"] },
+      { teclas: "789", extras: ["enter"] },
+      { teclas: "0", extras: ["vazio"] }
+    ]
+  };
 
   var estilo = document.createElement("style");
   estilo.textContent = [
@@ -167,13 +182,29 @@
       "padding:5px 4px calc(5px + env(safe-area-inset-bottom));",
       "user-select:none;-webkit-user-select:none;touch-action:manipulation}",
     "#teclado-letras.aberto{display:block}",
+    "#teclado-letras .placa{display:none}",
+    "#teclado-letras .placa.ativa{display:block}",
     "#teclado-letras .fila{display:flex;gap:4px;margin-bottom:4px;justify-content:center}",
     ".tecla{flex:1;min-width:0;height:44px;display:flex;align-items:center;justify-content:center;",
       "border-radius:6px;background:var(--clr-surface,#fff);color:var(--clr-text,#202124);",
       "box-shadow:0 1px 0 rgba(0,0,0,.25);font-family:var(--font);font-size:17px;font-weight:600}",
     ".tecla:active{background:rgba(26,111,212,.22)}",
-    ".tecla--acao{flex:1.4;background:var(--clr-surface-2,#f8f9fa);font-size:15px}",
-    ".tecla--espaco{flex:1;font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--clr-text-secondary,#5f6368)}",
+    // O numérico tem 4 teclas por linha em vez de 10: cada uma fica larga,
+    // que é o alvo que se acerta em pé, no corredor, sem olhar.
+    // Só os dígitos crescem. Sem o :not(), esta regra vencia por especificidade
+    // a fonte do ENTER e o texto transbordava a tecla.
+    ".placa--numeros .tecla:not(.tecla--acao):not(.tecla--enter):not(.tecla--vazio)",
+      "{font-size:21px;font-weight:700}",
+    ".tecla--acao{background:var(--clr-surface-2,#f8f9fa);font-size:15px}",
+    ".tecla--rotulo{font-size:12px;font-weight:700;letter-spacing:.06em;",
+      "color:var(--clr-text-secondary,#5f6368)}",
+    ".tecla--enter{background:var(--clr-primary,#1a6fd4);color:#fff;font-size:13px;",
+      "font-weight:800;letter-spacing:.06em}",
+    ".tecla--enter:active{filter:brightness(.9);background:var(--clr-primary,#1a6fd4)}",
+    ".tecla--vazio{background:transparent;box-shadow:none}",
+    // Última linha do numérico: o 0 ocupa as três colunas dos dígitos,
+    // como no teclado do telefone, e a quarta coluna fica vazia.
+    ".placa--numeros .fila:last-child .tecla:not(.tecla--vazio){flex:3}",
     "body.com-teclado .cnt{padding-bottom:230px}"
   ].join("");
   document.head.appendChild(estilo);
@@ -200,36 +231,70 @@
     }
   }
 
+  var placas = {};
+  var placaAtual = "letras";
+
+  function mostrarPlaca(nome) {
+    placaAtual = nome;
+    for (var k in placas) placas[k].classList.toggle("ativa", k === nome);
+  }
+
+  // O Enter da tela não reimplementa nada: dispara o mesmo evento que a tecla
+  // física dispararia, e quem decide o que fazer continua sendo o contagens.js
+  // — buscar o produto no campo do código, gravar na quantidade. Uma regra só,
+  // num lugar só.
+  function enterNoCampo() {
+    var alvo = document.activeElement;
+    if (NOSSOS.indexOf(alvo) === -1) { codigo.focus(); alvo = codigo; }
+    alvo.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Enter", code: "Enter", keyCode: 13, which: 13,
+      bubbles: true, cancelable: true
+    }));
+  }
+
   var EXTRAS = {
-    apagar: { texto: "⌫", classe: "tecla tecla--acao", acao: function () { apagar(codigo); } },
-    espaco: { texto: "ESPAÇO", classe: "tecla tecla--espaco", acao: function () { inserir(codigo, " "); } }
+    apagar:       { texto: "⌫",      classe: "tecla tecla--acao",   acao: function () { apagar(codigo); } },
+    espaco:       { texto: "ESPAÇO", classe: "tecla tecla--rotulo", acao: function () { inserir(codigo, " "); } },
+    enter:        { texto: "ENTER",  classe: "tecla tecla--enter",  acao: enterNoCampo },
+    paraNumeros:  { texto: "123",    classe: "tecla tecla--acao",   acao: function () { mostrarPlaca("numeros"); } },
+    paraLetras:   { texto: "ABC",    classe: "tecla tecla--acao",   acao: function () { mostrarPlaca("letras"); } },
+    vazio:        { texto: "",       classe: "tecla tecla--vazio",  acao: function () {} }
   };
 
-  FILAS.forEach(function (def) {
-    var fila = document.createElement("div");
-    fila.className = "fila";
+  Object.keys(TECLADOS).forEach(function (nome) {
+    var placa = document.createElement("div");
+    placa.className = "placa placa--" + nome;
 
-    (def.teclas || "").split("").forEach(function (ch) {
-      var t = document.createElement("div");
-      t.className = "tecla";
-      t.textContent = ch;
-      prender(t, function () { inserir(codigo, ch); });
-      fila.appendChild(t);
+    TECLADOS[nome].forEach(function (def) {
+      var fila = document.createElement("div");
+      fila.className = "fila";
+
+      (def.teclas || "").split("").forEach(function (ch) {
+        var t = document.createElement("div");
+        t.className = "tecla";
+        t.textContent = ch;
+        prender(t, function () { inserir(codigo, ch); });
+        fila.appendChild(t);
+      });
+
+      (def.extras || []).forEach(function (chave) {
+        var d = EXTRAS[chave];
+        if (!d) return;
+        var t = document.createElement("div");
+        t.className = d.classe;
+        t.textContent = d.texto;
+        if (chave !== "vazio") prender(t, d.acao);
+        fila.appendChild(t);
+      });
+
+      placa.appendChild(fila);
     });
 
-    (def.extras || []).forEach(function (nome) {
-      var d = EXTRAS[nome];
-      if (!d) return;
-      var t = document.createElement("div");
-      t.className = d.classe;
-      t.textContent = d.texto;
-      prender(t, d.acao);
-      fila.appendChild(t);
-    });
-
-    caixa.appendChild(fila);
+    placas[nome] = placa;
+    caixa.appendChild(placa);
   });
 
+  mostrarPlaca("letras");
   document.body.appendChild(caixa);
 
   /* ---------- 5. quando aparece ---------- */
