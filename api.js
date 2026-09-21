@@ -190,6 +190,15 @@ const API = {
     return d;
   },
 
+  // Texto de um erro JÁ LANÇADO, para mostrar na tela. As chamadas acima
+  // transformam a resposta do servidor em Error(mensagem); aqui só se tira a
+  // mensagem de volta. Não confundir com erro(r) logo abaixo: aquele lê uma
+  // RESPOSTA e é assíncrono — passar um Error para ele devolvia uma Promise,
+  // e a tela mostrava "[object Promise]" no lugar da mensagem.
+  texto(e) {
+    return (e && e.message) ? e.message : String(e || "erro desconhecido");
+  },
+
   // Mensagem de erro legível em vez de JSON cru na cara do usuário
   async erro(r) {
     try {

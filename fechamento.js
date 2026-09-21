@@ -203,7 +203,7 @@ async function finalizar() {
     recado("Sua parte está finalizada. A lista de produtos saiu deste aparelho e liberou o espaço dela.");
     await carregar();
   } catch (e) {
-    erro(API.erro(e));
+    erro(API.texto(e));
     await desenharMinhaParte();
   }
 }
@@ -262,7 +262,7 @@ async function fechar() {
     await carregar();
     await gerar();
   } catch (e) {
-    erro(API.erro(e));
+    erro(API.texto(e));
     desenharFechar();
   }
 }
@@ -270,6 +270,18 @@ async function fechar() {
 /* ---------- arquivos ---------- */
 function apagado() {
   return !!lote.contagens_apagadas_em;
+}
+
+// Quantas contagens ficaram valendo: lançamento não cancelado com quantidade
+// diferente de zero. O cancelamento grava um zero apontando para o cancelado,
+// e esse zero é marca, não contagem. É a MESMA regra do banco — lote_resumo,
+// apagar_inventario e gerar_arquivos. Se a tela e o banco discordarem, o
+// inventário trava: foi o que aconteceu com o JOAO, todo cancelado, que não
+// podia ser apagado sem e-mail e cujo e-mail recusava por não ter o que mandar.
+// Se a view ainda não tiver a coluna, cai para "lancamentos" — a regra antiga,
+// mais rígida, que nunca libera o que não devia.
+function efetivos() {
+  return Number((lote.efetivos ?? lote.lancamentos) || 0);
 }
 
 function desenharArquivos() {
@@ -288,6 +300,8 @@ function desenharArquivos() {
     return;
   }
   for (const b of ["btn-txt", "btn-csv", "btn-email"]) $(b).hidden = false;
+  // Nada ficou valendo: o envio recusaria, então o botão nem aparece.
+  if (efetivos() === 0) $("btn-email").hidden = true;
   if (!arquivos) $("ajuda-arquivos").textContent = "Montando os arquivos…";
 }
 
@@ -306,9 +320,13 @@ async function gerar() {
     $("ajuda-arquivos").innerHTML =
       `<b>${arquivos.arquivo}</b><br>` +
       `TXT: ${numero(arquivos.produtos)} códigos somados. CSV: ${numero(arquivos.lancamentos)} lançamentos.` +
-      (avisos.length ? "<br><br>" + avisos.join(" ") : "");
+      (avisos.length ? "<br><br>" + avisos.join(" ") : "") +
+      (efetivos() === 0
+        ? "<br><br><b>Nada contado ficou valendo</b> — tudo foi cancelado, ou nada foi contado. " +
+          "Não há o que enviar por e-mail, e o inventário pode ser apagado direto, lá embaixo."
+        : "");
   } catch (e) {
-    $("ajuda-arquivos").textContent = "Não consegui montar os arquivos: " + API.erro(e);
+    $("ajuda-arquivos").textContent = "Não consegui montar os arquivos: " + API.texto(e);
   }
 }
 
@@ -350,7 +368,7 @@ async function enviarEmail() {
     recado(r.mensagem || "E-mail enviado com o TXT e o CSV em anexo.");
     await carregar();
   } catch (e) {
-    erro("Não consegui enviar: " + API.erro(e) + " Os arquivos continuam disponíveis para baixar aqui.");
+    erro("Não consegui enviar: " + API.texto(e) + " Os arquivos continuam disponíveis para baixar aqui.");
   } finally {
     btn.disabled = false;
     btn.textContent = "Enviar por e-mail";
@@ -386,10 +404,10 @@ async function desenharLimpeza() {
     ? `Neste aparelho: ${guarda.join(" e ")}.`
     : "Este aparelho não guarda mais nada deste inventário.";
 
-  // O e-mail é exigido enquanto houver o que perder. Inventário sem nenhum
-  // lançamento — porque ninguém contou, ou porque já foram apagados antes —
-  // não tem arquivo para proteger.
-  const temOQuePerder = !apagado() && Number(lote.lancamentos || 0) > 0;
+  // O e-mail é exigido enquanto houver o que perder. Inventário sem nenhuma
+  // contagem valendo — porque ninguém contou, porque tudo foi cancelado, ou
+  // porque as contagens já foram apagadas antes — não tem arquivo a proteger.
+  const temOQuePerder = !apagado() && efetivos() > 0;
 
   if (temOQuePerder && !lote.enviado_em) {
     $("ajuda-limpeza").innerHTML =
@@ -414,7 +432,8 @@ async function desenharLimpeza() {
     $("ajuda-limpeza").innerHTML = apagado()
       ? `As contagens deste inventário já foram apagadas em <b>${quando(lote.contagens_apagadas_em)}</b>. ` +
         `Sobrou só a casca dele aqui — apagar tira ela da lista de vez.`
-      : `Este inventário não tem nenhum lançamento. Não há arquivo para proteger, então pode ser apagado direto.`;
+      : `Nada contado neste inventário ficou valendo — tudo foi cancelado, ou nada foi contado. ` +
+        `Não há arquivo para proteger, então pode ser apagado direto, sem o e-mail.`;
     btn.disabled = false;
     btn.textContent = "Apagar este inventário";
     return;
@@ -433,13 +452,13 @@ async function desenharLimpeza() {
 
 async function apagarInventario() {
 
-  const temOQuePerder = !apagado() && Number(lote.lancamentos || 0) > 0;
+  const temOQuePerder = !apagado() && efetivos() > 0;
   if (!confirm(
     `Apagar o inventário "${lote.nome}" de vez?\n\n` +
     `Sai do servidor e deste aparelho: os lançamentos, a lista de produtos e o próprio inventário.\n\n` +
     (temOQuePerder
       ? `O TXT e o CSV já foram para o seu e-mail em ${quando(lote.enviado_em)} — depois de apagar, eles não podem mais ser gerados por ninguém. Isso não tem volta.`
-      : `Este inventário não tem mais lançamentos, então não há arquivo a perder.`)
+      : `Nada contado neste inventário ficou valendo, então não há arquivo a perder.`)
   )) return;
 
   const btn = $("btn-apagar-inventario");
@@ -458,7 +477,7 @@ async function apagarInventario() {
     sessionStorage.setItem("recado", `<b>${r.nome}</b> foi apagado do servidor e deste aparelho.`);
     location.href = "lotes.html";
   } catch (e) {
-    erro(API.erro(e));
+    erro(API.texto(e));
     btn.disabled = false;
     await desenharLimpeza();
   }
@@ -481,7 +500,7 @@ $("btn-apagar-inventario").addEventListener("click", apagarInventario);
     await carregar();
     if (lote && lote.status === "fechado" && !apagado()) await gerar();
   } catch (e) {
-    erro(API.erro(e));
+    erro(API.texto(e));
   }
   // A fila continua trabalhando enquanto a tela está aberta: é o que
   // faz o botão de finalizar liberar sozinho quando o sinal volta.

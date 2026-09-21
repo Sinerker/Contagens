@@ -441,7 +441,7 @@ async function baixarCadastro(meta) {
     return true;
   } catch (e) {
     $("resultado").innerHTML =
-      `<div class="aviso aviso--erro">Não consegui baixar o cadastro para conferir: ${API.erro(e)}</div>`;
+      `<div class="aviso aviso--erro">Não consegui baixar o cadastro para conferir: ${API.texto(e)}</div>`;
     bipe(false);
     return false;
   }
@@ -501,7 +501,7 @@ async function adicionarAoLote(item, codigoBipado) {
   } catch (e) {
     btn.disabled = false;
     btn.textContent = "Adicionar a este inventário";
-    recado(API.erro(e));
+    recado(API.texto(e));
   }
 }
 
