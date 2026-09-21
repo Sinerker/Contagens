@@ -24,21 +24,23 @@ const API = {
     localStorage.setItem(CHAVE_SESSAO, JSON.stringify(s));
   },
 
+  // replace, não href: a página de onde se saiu não fica no histórico.
   sair() {
     localStorage.removeItem(CHAVE_SESSAO);
-    location.href = "index.html";
+    location.replace("index.html");
   },
 
-  // Manda para o login quem não entrou.
-  // Devolve a sessão para a página seguir.
+  // Segunda linha de defesa — a primeira é o guarda.js, no <head> de cada
+  // página, que barra antes de a página aparecer. Mesma regra lá e aqui:
+  // sessão só vale com as duas credenciais e um usuário.
   exigirLogin(precisaAdmin = false) {
     const s = this.sessao();
-    if (!s || !s.usuario) {
-      location.href = "index.html";
+    if (!s || !s.access_token || !s.refresh_token || !s.usuario || !s.usuario.id) {
+      location.replace("index.html");
       return null;
     }
     if (precisaAdmin && !s.usuario.admin) {
-      location.href = "lotes.html";
+      location.replace("lotes.html");
       return null;
     }
     return s;

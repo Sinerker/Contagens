@@ -11,7 +11,7 @@
    novo seria pior que erro de conexão.
    ============================================= */
 
-const VERSAO = "contagens-v19";
+const VERSAO = "contagens-v20";
 
 const ARQUIVOS = [
   "./",
@@ -21,7 +21,7 @@ const ARQUIVOS = [
   "contagens.html", "contagens.js", "teclado.js",
   "fechamento.html", "fechamento.js",
   "admin.html", "admin.js", "cadastro-worker.js",
-  "api.js", "config.js", "local.js", "pwa.js",
+  "api.js", "config.js", "local.js", "pwa.js", "guarda.js",
   "estilo.css", "manifest.json",
   "icon-192.png", "icon-512.png", "apple-touch-icon.png",
 ];

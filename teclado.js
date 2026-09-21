@@ -123,6 +123,30 @@
     return copia;
   }
 
+  // Tem teclado físico? O navegador não responde isso: coletor e celular se
+  // apresentam iguais (tela de toque, Android). Mas o coletor se entrega pelo
+  // comportamento — medido no aparelho, a tecla física chega com o "code" da
+  // tecla ("Digit4"), e nada num celular sem teclado manda isso.
+  //
+  // Só vale tecla apertada com o foco na QUANTIDADE. No campo do código chega
+  // também o leitor de código de barras, que manda "code" como um teclado —
+  // e um celular com leitor Bluetooth seria marcado como "tem teclado" e
+  // ficaria sem como digitar a quantidade. Na quantidade ninguém bipa.
+  //
+  // O Enter que o teclado da tela dispara é sintético (isTrusted = false) e
+  // não conta — senão o próprio teclado da tela marcaria o celular.
+  //
+  // A marca fica guardada no aparelho: no coletor isso acontece uma vez só.
+  var CHAVE_FISICO = "contagens.tecladoFisico";
+  function temTecladoFisico() {
+    try { return localStorage.getItem(CHAVE_FISICO) === "1"; } catch (_) { return false; }
+  }
+  function ehTeclaFisica(e) {
+    return e.isTrusted && !!e.code &&
+      (/^(Digit|Numpad)/.test(e.code) || e.code === "Backspace" ||
+       e.code === "Enter" || e.code === "Comma" || e.code === "Period");
+  }
+
   // Captura: precisa chegar antes de qualquer outro. Enter e Tab
   // passam direto — Enter é o que busca o produto e grava a
   // contagem, e isso continua sendo do contagens.js.
@@ -130,6 +154,11 @@
     var c = document.activeElement;
     if (NOSSOS.indexOf(c) === -1) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    if (c === quantidade && !temTecladoFisico() && ehTeclaFisica(e)) {
+      try { localStorage.setItem(CHAVE_FISICO, "1"); } catch (_) {}
+      if (!qtdForcado) setTimeout(atualizarTeclado, 0);
+    }
 
     // 229 é o aviso "quem manda nesta tecla é o IME". Não é caractere
     // nenhum, e o campo é readonly, então o IME não escreve nada.
@@ -172,8 +201,20 @@
       { teclas: "456", extras: ["paraLetras"] },
       { teclas: "789", extras: ["enter"] },
       { teclas: "0", extras: ["vazio"] }
+    ],
+    // A da quantidade: mesma grade do numérico, para a mão não reaprender
+    // nada. No lugar do ABC, a vírgula — quantidade não tem letra, e tem
+    // produto que se conta em quilo.
+    quantidade: [
+      { teclas: "123", extras: ["apagarQtd"] },
+      { teclas: "456", extras: ["virgula"] },
+      { teclas: "789", extras: ["enter"] },
+      { teclas: "0", extras: ["vazio"] }
     ]
   };
+
+  // Em qual campo cada placa escreve.
+  var ALVO = { letras: codigo, numeros: codigo, quantidade: quantidade };
 
   var estilo = document.createElement("style");
   estilo.textContent = [
@@ -193,8 +234,10 @@
     // que é o alvo que se acerta em pé, no corredor, sem olhar.
     // Só os dígitos crescem. Sem o :not(), esta regra vencia por especificidade
     // a fonte do ENTER e o texto transbordava a tecla.
-    ".placa--numeros .tecla:not(.tecla--acao):not(.tecla--enter):not(.tecla--vazio)",
+    ".placa--numeros .tecla:not(.tecla--acao):not(.tecla--enter):not(.tecla--vazio),",
+    ".placa--quantidade .tecla:not(.tecla--acao):not(.tecla--enter):not(.tecla--vazio)",
       "{font-size:21px;font-weight:700}",
+    ".placa--quantidade .tecla--acao{font-size:21px;font-weight:700}",
     ".tecla--acao{background:var(--clr-surface-2,#f8f9fa);font-size:15px}",
     ".tecla--rotulo{font-size:12px;font-weight:700;letter-spacing:.06em;",
       "color:var(--clr-text-secondary,#5f6368)}",
@@ -204,7 +247,8 @@
     ".tecla--vazio{background:transparent;box-shadow:none}",
     // Última linha do numérico: o 0 ocupa as três colunas dos dígitos,
     // como no teclado do telefone, e a quarta coluna fica vazia.
-    ".placa--numeros .fila:last-child .tecla:not(.tecla--vazio){flex:3}",
+    ".placa--numeros .fila:last-child .tecla:not(.tecla--vazio),",
+    ".placa--quantidade .fila:last-child .tecla:not(.tecla--vazio){flex:3}",
     "body.com-teclado .cnt{padding-bottom:230px}"
   ].join("");
   document.head.appendChild(estilo);
@@ -214,28 +258,36 @@
 
   // O segredo está no preventDefault do toque: sem ele cada tecla
   // rouba o foco do campo, e o próximo bipe se perde no vazio.
+  //
+  // Antes havia aqui uma trava de 40 ms contra toque duplo na MESMA tecla — e
+  // ela engolia dígito: "0000000" tocado rápido virava "0000". Com
+  // PointerEvent (o Chrome do coletor e de qualquer celular) um toque gera um
+  // evento só, e não há o que travar.
   function prender(el, acao) {
-    var quieto = false;
-    function agir(e) {
-      e.preventDefault();
-      if (quieto) return;
-      quieto = true;
-      setTimeout(function () { quieto = false; }, 40);
-      acao();
-    }
     if (window.PointerEvent) {
-      el.addEventListener("pointerdown", agir);
-    } else {
-      el.addEventListener("touchstart", agir, { passive: false });
-      el.addEventListener("mousedown", agir);
+      el.addEventListener("pointerdown", function (e) { e.preventDefault(); acao(); });
+      return;
     }
+    // Navegador antigo, sem PointerEvent: o toque dispara touchstart e, logo
+    // depois, um mousedown "fantasma" do mesmo toque. Só o fantasma é ignorado
+    // — um segundo toque de verdade é outro touchstart e passa.
+    var ultimoToque = 0;
+    el.addEventListener("touchstart", function (e) {
+      e.preventDefault(); ultimoToque = Date.now(); acao();
+    }, { passive: false });
+    el.addEventListener("mousedown", function (e) {
+      e.preventDefault();
+      if (Date.now() - ultimoToque < 600) return;
+      acao();
+    });
   }
 
   var placas = {};
-  var placaAtual = "letras";
+  var placaCodigo = "letras";   // a última escolhida no campo do código
+  var qtdForcado = false;       // tocou na quantidade pedindo o teclado
 
   function mostrarPlaca(nome) {
-    placaAtual = nome;
+    if (nome !== "quantidade") placaCodigo = nome;
     for (var k in placas) placas[k].classList.toggle("ativa", k === nome);
   }
 
@@ -258,6 +310,8 @@
     enter:        { texto: "ENTER",  classe: "tecla tecla--enter",  acao: enterNoCampo },
     paraNumeros:  { texto: "123",    classe: "tecla tecla--acao",   acao: function () { mostrarPlaca("numeros"); } },
     paraLetras:   { texto: "ABC",    classe: "tecla tecla--acao",   acao: function () { mostrarPlaca("letras"); } },
+    apagarQtd:    { texto: "⌫",      classe: "tecla tecla--acao",   acao: function () { apagar(quantidade); } },
+    virgula:      { texto: ",",      classe: "tecla tecla--acao",   acao: function () { inserir(quantidade, ","); } },
     vazio:        { texto: "",       classe: "tecla tecla--vazio",  acao: function () {} }
   };
 
@@ -273,7 +327,7 @@
         var t = document.createElement("div");
         t.className = "tecla";
         t.textContent = ch;
-        prender(t, function () { inserir(codigo, ch); });
+        prender(t, function () { inserir(ALVO[nome], ch); });
         fila.appendChild(t);
       });
 
@@ -309,6 +363,7 @@
   function abrir(sim) {
     caixa.classList.toggle("aberto", sim);
     document.body.classList.toggle("com-teclado", sim);
+    if (sim) setTimeout(mostrarCampo, 30);
 
     if (sim) {
       if (!nossoPasso) {
@@ -331,20 +386,48 @@
     document.body.classList.remove("com-teclado");
   });
 
-  codigo.addEventListener("focus", function () { abrir(true); });
+  // Um lugar só decide o que aparece, olhando onde está o foco:
+  //   código      -> letras ou números (o último escolhido)
+  //   quantidade  -> o numérico da quantidade, se o aparelho NÃO tem teclado
+  //                  físico — ou se a pessoa tocou no campo pedindo
+  //   outro lugar -> nada
+  function atualizarTeclado() {
+    var a = document.activeElement;
+    if (a === codigo) {
+      mostrarPlaca(placaCodigo);
+      abrir(true);
+    } else if (a === quantidade && (!temTecladoFisico() || qtdForcado)) {
+      mostrarPlaca("quantidade");
+      abrir(true);
+    } else {
+      abrir(false);
+    }
+  }
+
+  // Se o campo ficou atrás do teclado, sobe a tela o bastante para ele
+  // aparecer. No coletor o código fica acima; no celular a quantidade não.
+  function mostrarCampo() {
+    var c = document.activeElement;
+    if (NOSSOS.indexOf(c) === -1 || !caixa.classList.contains("aberto")) return;
+    var r = c.getBoundingClientRect();
+    var topo = caixa.getBoundingClientRect().top;
+    if (r.bottom > topo - 8) window.scrollBy(0, r.bottom - topo + 16);
+  }
+
+  codigo.addEventListener("focus", atualizarTeclado);
+  quantidade.addEventListener("focus", function () { qtdForcado = false; atualizarTeclado(); });
 
   // Depois que o Voltar escondeu o teclado, o campo continua focado — então
   // um toque nele não gera "focus" nenhum. Sem isto, o teclado não voltava.
-  codigo.addEventListener("click", function () { abrir(true); });
-  codigo.addEventListener("blur", function () {
-    // O teclado não tira o foco (preventDefault acima), então um
-    // blur de verdade é a pessoa saindo do campo.
-    setTimeout(function () {
-      if (document.activeElement !== codigo) abrir(false);
-    }, 0);
-  });
+  // Na quantidade, o toque também é o jeito de pedir o teclado num aparelho
+  // que tem teclado físico (ou que foi marcado assim por engano).
+  codigo.addEventListener("click", atualizarTeclado);
+  quantidade.addEventListener("click", function () { qtdForcado = true; atualizarTeclado(); });
 
-  quantidade.addEventListener("focus", function () { abrir(false); });
+  // O teclado não tira o foco (preventDefault acima), então um blur de
+  // verdade é a pessoa saindo do campo.
+  codigo.addEventListener("blur", function () { setTimeout(atualizarTeclado, 0); });
+  quantidade.addEventListener("blur", function () { setTimeout(atualizarTeclado, 0); });
 
   /* ---------- 6. não deixar o foco se perder ---------- */
   // Um toque em área vazia tirava o foco do código, e a partir dali
