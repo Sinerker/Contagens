@@ -44,7 +44,6 @@ Substitui o InventarioPostos, que continua no ar até a migração.
 | `lotes.html` / `lotes.js` | Os inventários da loja |
 | `criar-lote.html` / `criar-lote.js` | Árvore de categorias |
 | `contagens.html` / `contagens.js` | A tela do coletor, offline |
-| `teclado.js` | O teclado da tela de contagem, no lugar do teclado do Android |
 | `fechamento.html` / `fechamento.js` | Finalizar, fechar e entregar |
 | `admin.html` / `admin.js` | Cadastro do sistema, lojas e usuários |
 | `local.js` | Banco do aparelho, índices de busca e fila de envio |
