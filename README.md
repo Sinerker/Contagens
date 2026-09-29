@@ -7,6 +7,9 @@ Substitui o InventarioPostos, que continua no ar até a migração.
 
 ## Como funciona
 
+O cadastro carregado aqui também abastece o app dos postos (Rotta400):
+terminada a carga, ele viaja para lá sozinho. Um lugar só para atualizar.
+
 1. **Administração** — você carrega o cadastro escolhendo os relatórios do
    sistema: um de níveis e os de EANs. O site confere as contagens de linha,
    junta os dois pelo código do produto e monta a árvore de categorias.
@@ -46,6 +49,7 @@ Substitui o InventarioPostos, que continua no ar até a migração.
 | `contagens.html` / `contagens.js` | A tela do coletor, offline |
 | `fechamento.html` / `fechamento.js` | Finalizar, fechar e entregar |
 | `admin.html` / `admin.js` | Cadastro do sistema, lojas e usuários |
+| `rotta400.js` | Manda o cadastro para o app dos postos no fim de cada carga |
 | `local.js` | Banco do aparelho, índices de busca e fila de envio |
 | `api.js` | Login e chamadas ao banco, sem biblioteca externa |
 | `sw.js` / `pwa.js` | Faz o app abrir sem internet |

@@ -174,6 +174,9 @@ async function carregarCadastro() {
     }
     mostrar("resultado", texto, "ok");
     await cadastroAtual();
+
+    // O app dos postos usa este mesmo cadastro: vai agora, sozinho.
+    await enviarAoRotta400({ automatico: true });
   } catch (e) {
     document.getElementById("andamento").hidden = true;
     barra.hidden = true;
@@ -184,6 +187,143 @@ async function carregarCadastro() {
     btn.textContent = "Ler e carregar";
   }
 }
+
+/* =============================================
+   POSTOS (Rotta400)
+   =============================================
+   O envio acontece sozinho no fim de cada carga. O botão existe para
+   quando a carga terminou e a viagem não deu certo — internet caiu,
+   sessão vencida — ou para conferir a situação de lá.
+   ============================================= */
+async function situacaoRotta400() {
+  const el = document.getElementById("r400-situacao");
+  const entrar = document.getElementById("r400-entrar");
+  const btn = document.getElementById("btn-r400");
+  const btnSair = document.getElementById("btn-r400-sair");
+
+  if (!R400.ligado()) {
+    el.textContent = "O endereço do Rotta400 não está configurado neste site.";
+    entrar.hidden = true; btn.hidden = true; btnSair.hidden = true;
+    return;
+  }
+
+  if (!R400.conectado()) {
+    el.innerHTML = "Não conectado. Entre com o seu login do Rotta400 — ele fica guardado " +
+                   "neste navegador e o envio passa a acontecer sozinho.";
+    entrar.hidden = false;
+    btn.hidden = false;
+    btn.textContent = "Conectar";
+    btnSair.hidden = true;
+    return;
+  }
+
+  entrar.hidden = true;
+  btn.hidden = false;
+  btn.textContent = "Enviar cadastro agora";
+  btnSair.hidden = false;
+
+  try {
+    const s = await R400.situacao();
+    const quando = s.atualizado
+      ? new Date(s.atualizado).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+      : "nunca";
+    el.innerHTML =
+      `Conectado como <b>${R400.sessao().email}</b>.<br>` +
+      `Lá hoje: <b>${numero(s.linhas)} códigos</b> e ${numero(s.produtos)} produtos · atualizado em ${quando}.`;
+  } catch (e) {
+    el.innerHTML = `Conectado, mas não consegui ler a situação de lá: ${API.texto(e)}`;
+  }
+}
+
+async function enviarAoRotta400({ automatico = false } = {}) {
+  const btn = document.getElementById("btn-r400");
+  const andamento = document.getElementById("r400-andamento");
+  const barra = document.getElementById("r400-barra");
+  const cheia = document.getElementById("r400-barra-cheia");
+
+  if (!R400.ligado()) return;
+
+  if (!R400.conectado()) {
+    if (automatico) {
+      mostrar("r400-resultado",
+        "<b>O cadastro dos postos não foi atualizado.</b><br>" +
+        "Conecte o Rotta400 aqui embaixo e clique em Enviar cadastro agora. " +
+        "O cadastro do Contagens já está trocado — não precisa carregar de novo.",
+        "erro");
+    }
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Enviando…";
+  barra.hidden = false;
+  cheia.style.width = "0%";
+  andamento.hidden = false;
+  andamento.textContent = "Conferindo o cadastro…";
+  mostrar("r400-resultado", "", "neutro");
+
+  try {
+    const r = await R400.enviar(({ enviadas, total, segundos }) => {
+      const pct = (enviadas / total) * 100;
+      cheia.style.width = Math.min(99, pct).toFixed(1) + "%";
+      const falta = Math.round((segundos / enviadas) * (total - enviadas));
+      andamento.textContent =
+        `${numero(enviadas)} de ${numero(total)} · ${pct.toFixed(0)}%` +
+        (falta > 5 ? ` · falta cerca de ${falta > 60 ? Math.ceil(falta / 60) + " min" : falta + " s"}` : "");
+    });
+
+    cheia.style.width = "100%";
+    andamento.hidden = true;
+    mostrar("r400-resultado",
+      `<b>Cadastro dos postos atualizado.</b><br>` +
+      `${numero(r.linhas)} códigos e ${numero(r.produtos)} produtos, em ${r.segundos} segundos.` +
+      (r.antes ? `<br>Antes tinha ${numero(r.antes)} códigos.` : ""),
+      "ok");
+    await situacaoRotta400();
+  } catch (e) {
+    andamento.hidden = true;
+    barra.hidden = true;
+    mostrar("r400-resultado",
+      `<b>Não foi para os postos. Lá continua com o cadastro anterior, inteiro.</b><br>` +
+      `${API.texto(e)}<br>Pode tentar de novo no botão — o cadastro daqui já está pronto.`,
+      "erro");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = R400.conectado() ? "Enviar cadastro agora" : "Conectar";
+  }
+}
+
+document.getElementById("btn-r400").addEventListener("click", async () => {
+  const btn = document.getElementById("btn-r400");
+
+  if (!R400.conectado()) {
+    const email = document.getElementById("r400-email").value;
+    const senha = document.getElementById("r400-senha").value;
+    if (!email || !senha) {
+      return mostrar("r400-resultado", "Informe o e-mail e a senha do Rotta400.", "erro");
+    }
+    btn.disabled = true;
+    try {
+      await R400.entrar(email, senha);
+      document.getElementById("r400-senha").value = "";
+      mostrar("r400-resultado", "", "neutro");
+      await situacaoRotta400();
+    } catch (e) {
+      mostrar("r400-resultado", API.texto(e), "erro");
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
+
+  await enviarAoRotta400();
+});
+
+document.getElementById("btn-r400-sair").addEventListener("click", async () => {
+  R400.sair();
+  mostrar("r400-resultado", "", "neutro");
+  await situacaoRotta400();
+});
 
 /* =============================================
    LOJAS
@@ -343,6 +483,7 @@ document.getElementById("btn-novo-usuario").addEventListener("click", async () =
 /* ---------------- início ---------------- */
 if (sessao) {
   cadastroAtual();
+  situacaoRotta400();
   listarLojas();
   listarUsuarios();
 }

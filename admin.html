@@ -68,6 +68,35 @@
 
         <button class="botao" id="btn-carregar" disabled>Ler e carregar</button>
       </div>
+
+      <div class="cartao">
+        <div class="cartao-titulo">Postos (Rotta400)</div>
+        <p class="cartao-ajuda">
+          O app dos postos usa este mesmo cadastro. Assim que a carga acima termina,
+          ele é enviado para lá sozinho. O cadastro de lá só é trocado no fim: se a
+          internet cair no meio, lá continua com o que já tinha.
+        </p>
+
+        <div id="r400-situacao" class="cartao-ajuda">Verificando…</div>
+
+        <div id="r400-entrar" hidden>
+          <div class="campo">
+            <label class="rotulo" for="r400-email">E-mail do auditor no Rotta400</label>
+            <input class="entrada" id="r400-email" type="email" autocomplete="username" placeholder="auditor@rotta400.app" />
+          </div>
+          <div class="campo">
+            <label class="rotulo" for="r400-senha">Senha</label>
+            <input class="entrada" id="r400-senha" type="password" autocomplete="current-password" />
+          </div>
+        </div>
+
+        <div class="aviso aviso--neutro" id="r400-andamento" hidden></div>
+        <div class="barra" id="r400-barra" hidden><div class="barra-cheia" id="r400-barra-cheia"></div></div>
+        <div class="aviso" id="r400-resultado" hidden></div>
+
+        <button class="botao" id="btn-r400">Conectar</button>
+        <button class="botao botao--fantasma botao--pequeno" id="btn-r400-sair" hidden>Desconectar</button>
+      </div>
     </section>
 
     <!-- ================= LOJAS ================= -->
@@ -123,6 +152,7 @@
 
   <script src="config.js"></script>
   <script src="api.js"></script>
+  <script src="rotta400.js"></script>
   <script src="admin.js"></script>
   <script src="pwa.js"></script>
 </body>
