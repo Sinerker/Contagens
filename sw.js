@@ -11,7 +11,7 @@
    novo seria pior que erro de conexão.
    ============================================= */
 
-const VERSAO = "contagens-v22";
+const VERSAO = "contagens-v23";
 
 const ARQUIVOS = [
   "./",

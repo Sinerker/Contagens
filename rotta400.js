@@ -24,7 +24,7 @@
 
 const R400 = {
   CHAVE: "contagens.rotta400",
-  BLOCO: 5000,       // linhas por viagem; ~30 viagens no cadastro de hoje
+  BLOCO: 1000,       // o banco não entrega mais que 1000 por consulta, peça o que pedir
   TENTATIVAS: 3,     // internet ruim não pode derrubar uma carga inteira
 
   ligado() {
@@ -138,6 +138,11 @@ const R400 = {
 
   // Página por código, não por posição: assim nenhuma linha escapa nem
   // vem duas vezes, mesmo com o banco ocupado.
+  //
+  // O banco tem um teto próprio de linhas por consulta (1000). Pedir mais
+  // não dá erro: ele entrega menos, calado. Por isso o laço lá embaixo só
+  // termina quando vem uma página VAZIA — nunca porque veio menos do que
+  // se pediu. Foi assim que a primeira tentativa de verdade parou no 1.000.
   async pagina(depoisDe) {
     const filtro = depoisDe ? `&ean=gt.${encodeURIComponent(depoisDe)}` : "";
     const r = await fetch(
@@ -200,8 +205,6 @@ const R400 = {
       enviadas += linhas.length;
       ultimo = linhas[linhas.length - 1].ean;
       aoAndar({ enviadas, total, segundos: (Date.now() - t0) / 1000 });
-
-      if (linhas.length < this.BLOCO) break;
     }
 
     if (enviadas !== total) {
