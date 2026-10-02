@@ -296,10 +296,10 @@ function desenharArquivos() {
     $("ajuda-arquivos").innerHTML =
       `As contagens deste inventário foram apagadas em <b>${quando(lote.contagens_apagadas_em)}</b> para liberar espaço. ` +
       `O TXT e o CSV saíram por e-mail antes disso — procure no e-mail ou no OneDrive.`;
-    for (const b of ["btn-txt", "btn-csv", "btn-email"]) $(b).hidden = true;
+    for (const b of ["btn-txt", "btn-planilha", "btn-email"]) $(b).hidden = true;
     return;
   }
-  for (const b of ["btn-txt", "btn-csv", "btn-email"]) $(b).hidden = false;
+  for (const b of ["btn-txt", "btn-planilha", "btn-email"]) $(b).hidden = false;
   // Nada ficou valendo: o envio recusaria, então o botão nem aparece.
   if (efetivos() === 0) $("btn-email").hidden = true;
   if (!arquivos) $("ajuda-arquivos").textContent = "Montando os arquivos…";
@@ -330,6 +330,7 @@ async function gerar() {
   }
 }
 
+// Serve para texto (TXT, CSV) e para bytes (XLSX).
 function baixar(conteudo, nome, tipo) {
   const blob = new Blob([conteudo], { type: tipo });
   const url = URL.createObjectURL(blob);
@@ -348,11 +349,61 @@ async function baixarTxt() {
   baixar(arquivos.txt, `${arquivos.arquivo}.txt`, "text/plain;charset=utf-8;");
 }
 
-async function baixarCsv() {
+/* ---------- a planilha ----------
+   As 12 colunas do CSV, com o TIPO de cada uma. É isso que separa o
+   XLSX do CSV: aqui o código de barras é texto e chega inteiro, em vez
+   de virar 7,89199E+12 quando o Excel adivinha sozinho.
+
+   A aba se chama SEPARAÇÃO porque é o nome que o Processador de
+   Divergências procura (ele pega a primeira aba que começa com SEPAR).
+   Assim o arquivo vai direto para ele, sem salvar como nem renomear. */
+const COLUNAS = [
+  { titulo: "DATA",          tipo: PLANILHA.TEXTO,  largura: 11 },
+  { titulo: "HORA",          tipo: PLANILHA.TEXTO,  largura: 9 },
+  { titulo: "USUARIO",       tipo: PLANILHA.TEXTO,  largura: 16 },
+  { titulo: "TIPO-CONTAGEM", tipo: PLANILHA.TEXTO,  largura: 15 },
+  { titulo: "CORREDOR",      tipo: PLANILHA.TEXTO,  largura: 20 },
+  { titulo: "COLUNA",        tipo: PLANILHA.TEXTO,  largura: 9 },
+  { titulo: "ANDAR",         tipo: PLANILHA.TEXTO,  largura: 8 },
+  { titulo: "SEQPRODUTO",    tipo: PLANILHA.NUMERO, largura: 13 },
+  { titulo: "CODACESSO",     tipo: PLANILHA.TEXTO,  largura: 17 },
+  { titulo: "DESCCOMPLETA",  tipo: PLANILHA.TEXTO,  largura: 44 },
+  { titulo: "QTDEMBALAGEM",  tipo: PLANILHA.NUMERO, largura: 14 },
+  { titulo: "QUANTIDADE",    tipo: PLANILHA.NUMERO, largura: 12 },
+];
+
+function montarPlanilha() {
+  return PLANILHA.montar({
+    aba: "SEPARAÇÃO",
+    cabecalho: COLUNAS.map((c) => c.titulo),
+    tipos:     COLUNAS.map((c) => c.tipo),
+    larguras:  COLUNAS.map((c) => c.largura),
+    linhas:    arquivos.dados || [],
+  });
+}
+
+// Um clique, os dois arquivos. O CSV continua saindo porque é o formato
+// que sempre saiu; o XLSX é o que vai direto para o Processador.
+async function baixarPlanilha() {
+  const btn = $("btn-planilha");
   if (!arquivos) await gerar();
   if (!arquivos) return;
-  // O BOM é o que faz o Excel ler os acentos.
-  baixar("﻿" + arquivos.csv, `${arquivos.arquivo}.csv`, "text/csv;charset=utf-8;");
+
+  btn.disabled = true;
+  const rotulo = btn.textContent;
+  btn.textContent = "Montando…";
+  try {
+    // O BOM é o que faz o Excel ler os acentos do CSV.
+    baixar("﻿" + arquivos.csv, `${arquivos.arquivo}.csv`, "text/csv;charset=utf-8;");
+    const xlsx = await montarPlanilha();
+    baixar(xlsx, `${arquivos.arquivo}.xlsx`,
+           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  } catch (e) {
+    erro("Não consegui montar a planilha: " + API.texto(e) + " O CSV continua disponível.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = rotulo;
+  }
 }
 
 async function enviarEmail() {
@@ -488,7 +539,7 @@ $("btn-finalizar").addEventListener("click", finalizar);
 $("btn-voltar-contar").addEventListener("click", voltarAContar);
 $("btn-fechar").addEventListener("click", fechar);
 $("btn-txt").addEventListener("click", baixarTxt);
-$("btn-csv").addEventListener("click", baixarCsv);
+$("btn-planilha").addEventListener("click", baixarPlanilha);
 $("btn-email").addEventListener("click", enviarEmail);
 $("btn-apagar-inventario").addEventListener("click", apagarInventario);
 
