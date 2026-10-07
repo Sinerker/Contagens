@@ -56,12 +56,13 @@ async function* linhasDe(origem) {
   }
 
   const leitor = origem.stream().getReader();
-  const decoder = new TextDecoder("utf-8");
+  let decoder = null;   // decidido no primeiro pedaço, ver acharCodificacao
   let resto = "";
   while (true) {
     const { done, value } = await leitor.read();
     if (value) {
       bytesLidos += value.byteLength;
+      if (!decoder) decoder = new TextDecoder(acharCodificacao(value));
       resto += decoder.decode(value, { stream: true });
       let inicio = 0, corte = resto.indexOf("\n", inicio);
       while (corte !== -1) {
@@ -73,8 +74,32 @@ async function* linhasDe(origem) {
     }
     if (done) break;
   }
-  resto += decoder.decode();
+  if (decoder) resto += decoder.decode();
   if (resto) yield resto;
+}
+
+// O relatório nem sempre vem em UTF-8. O de níveis exportado em 07/10/2026
+// veio em Windows-1252 (acento ocupa um byte só), e o decodificador de UTF-8
+// troca cada acento por "\uFFFD": a descrição chega suja e ninguém percebe até
+// alguém procurar "AÇÚCAR" e não achar. Então: tenta UTF-8 de verdade
+// (fatal: true faz ele reclamar em vez de remendar) e, se o arquivo não for
+// UTF-8 válido, lê como Windows-1252.
+function acharCodificacao(bytes) {
+  try {
+    const amostra = bytes.subarray(0, Math.min(bytes.length, 65536));
+    // Corta o final para não julgar um caractere partido no meio do pedaço.
+    const ate = amostra.length > 4 ? amostra.length - 4 : amostra.length;
+    new TextDecoder("utf-8", { fatal: true }).decode(amostra.subarray(0, ate));
+    return "utf-8";
+  } catch (_) {
+    return "windows-1252";
+  }
+}
+
+// O mesmo relatório sai com TAB numa exportação e com ponto e vírgula noutra.
+// Decide pela primeira linha de dados e não se fala mais nisso.
+function acharSeparador(linha) {
+  return linha.indexOf("\t") !== -1 ? "\t" : ";";
 }
 
 function limpar(linha) {
@@ -120,6 +145,7 @@ async function processar({ niveis, eans }) {
 
   if (niveis) {
     let primeira = true;
+    let sep = null;
     for await (const bruta of linhasDe(niveis)) {
       const linha = limpar(bruta);
       if (!linha.trim()) continue;
@@ -127,13 +153,19 @@ async function processar({ niveis, eans }) {
       const total = linha.match(/TOTAL:\s*([\d.]+)\s*linhas/i);
       if (total) { resumo.niveisDeclarado = parseInt(total[1].replace(/\./g, ""), 10); continue; }
 
-      const col = linha.split("\t");
+      if (sep === null) sep = acharSeparador(linha);
+      const col = linha.split(sep);
       if (primeira) { primeira = false; if (!/^\d+$/.test(col[0].trim())) continue; }
 
       const seq = parseInt(col[0], 10);
       if (!Number.isFinite(seq)) continue;
 
-      const meio = (col[1] || "").trim();
+      // Primeira coluna é o produto; as DUAS ÚLTIMAS são embalagem e código.
+      // O que sobra no meio é "descrição : caminho" — e a descrição pode ter
+      // o separador dentro dela, então ela é remontada, não recortada.
+      const meio = (col.length >= 4 ? col.slice(1, col.length - 2).join(sep) : (col[1] || "")).trim();
+      const colEmb = col.length >= 3 ? col[col.length - 2] : "";
+      const colCod = col.length >= 4 ? col[col.length - 1] : "";
       // O caminho nunca tem " : ", a descrição às vezes tem.
       // Por isso o corte é no ÚLTIMO, não no primeiro.
       const corte = meio.lastIndexOf(" : ");
@@ -145,11 +177,11 @@ async function processar({ niveis, eans }) {
         seqproduto: seq,
         descricao,
         caminho: caminho || null,
-        embalagem_unitaria: limparTexto(col[2]) || null,
+        embalagem_unitaria: limparTexto(colEmb) || null,
       });
       resumo.niveis++;
 
-      const cod = limparTexto(col[3]);
+      const cod = limparTexto(colCod);
       if (cod) {
         anotar(cod, seq);
         blocoCodigo.push({
@@ -175,12 +207,14 @@ async function processar({ niveis, eans }) {
   for (const arquivo of eans) {
     resumo.arquivosEans++;
     let primeira = true;
+    let sepE = null;
 
     for await (const bruta of linhasDe(arquivo)) {
       const linha = limpar(bruta);
       if (!linha.trim()) continue;
 
-      const p = linha.split(";");
+      if (sepE === null) sepE = acharSeparador(linha);
+      const p = linha.split(sepE);
       if (primeira) { primeira = false; if (!/^\d+$/.test(p[0].trim())) continue; }
       if (p.length < 4) continue;
 
@@ -191,7 +225,7 @@ async function processar({ niveis, eans }) {
       // código e embalagem são sempre as DUAS ÚLTIMAS.
       const qtd = p[p.length - 1].trim();
       const cod = limparTexto(p[p.length - 2]);
-      const descricao = limparTexto(p.slice(1, p.length - 2).join(";"));
+      const descricao = limparTexto(p.slice(1, p.length - 2).join(sepE));
       if (!cod) continue;
 
       anotar(cod, seq);
