@@ -9,9 +9,15 @@
    Só cuida dos arquivos do próprio site. Chamada ao
    banco nunca passa por aqui: dado velho servido como
    novo seria pior que erro de conexão.
+
+   Regra: REDE PRIMEIRO, com 2,5 s de paciência. Se a rede
+   responder, vale a versão nova — abrir a tela já traz a
+   correção publicada, sem recarregar duas vezes. Se a rede
+   demorar ou não existir, vale o que está guardado, e a
+   tela abre igual dentro da câmara fria.
    ============================================= */
 
-const VERSAO = "contagens-v25";
+const VERSAO = "contagens-v26";
 
 const ARQUIVOS = [
   "./",
@@ -42,26 +48,41 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+const ESPERA_REDE = 2500;   // milissegundos
+
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
   if (url.origin !== location.origin) return; // banco não passa por aqui
 
-  e.respondWith(
-    caches.match(e.request).then((guardado) => {
-      const rede = fetch(e.request)
-        .then((r) => {
-          if (r && r.ok) {
-            const copia = r.clone();
-            caches.open(VERSAO).then((c) => c.put(e.request, copia));
-          }
-          return r;
-        })
-        .catch(() => guardado);
+  e.respondWith((async () => {
+    const guardado = await caches.match(e.request);
 
-      // Serve o que está guardado na hora e atualiza por trás:
-      // no coletor, abrir rápido vale mais que abrir atualizado.
-      return guardado || rede;
-    })
-  );
+    // Sem internet declarada pelo aparelho: nem tenta, usa o que tem.
+    // É o caso da câmara fria e do depósito sem cobertura.
+    if (!navigator.onLine && guardado) return guardado;
+
+    const daRede = fetch(e.request).then((r) => {
+      if (r && r.ok) {
+        const copia = r.clone();
+        caches.open(VERSAO).then((c) => c.put(e.request, copia));
+      }
+      return r;
+    });
+    // Deixa o download terminar mesmo se a resposta já tiver saído daqui:
+    // é assim que o cache fica em dia para a próxima abertura.
+    e.waitUntil(daRede.catch(() => {}));
+
+    // Primeira vez, nada guardado: não há alternativa senão esperar.
+    if (!guardado) return daRede;
+
+    // O ponto desta função: a versão nova ganha sempre que a rede
+    // responder a tempo. Antes era o contrário — servia o guardado na
+    // hora e atualizava por trás, e aí a primeira recarga depois de uma
+    // publicação ainda rodava o código velho. Em 07/10/2026 isso fez uma
+    // carga de cadastro falhar com o leitor antigo, já corrigido no ar.
+    const relogio = new Promise((ok) => setTimeout(() => ok(null), ESPERA_REDE));
+    const resposta = await Promise.race([daRede.catch(() => null), relogio]);
+    return resposta || guardado;
+  })());
 });
