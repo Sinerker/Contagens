@@ -151,10 +151,14 @@ async function desenharMinhaParte() {
   }
 
   if (pendentes > 0) {
+    const recusadas = (await LOCAL.doLote(loteId)).filter((c) => !c.enviado && c.recusada);
     $("minha-parte").innerHTML =
       `<b>${numero(pendentes)} contagem(ns) ainda não subiram</b> deste aparelho. ` +
       `Elas estão guardadas aqui e não se perdem, mas finalizar agora deixaria o arquivo sair sem elas. ` +
-      `Conecte à internet — a fila sobe sozinha e o botão libera.`;
+      (recusadas.length
+        ? `<br><b>${numero(recusadas.length)} foi(ram) recusada(s) pelo servidor</b> e não sobem sozinha(s): ` +
+          `${recusadas[0].descricao} — ${recusadas[0].erro_envio}. Avise o administrador.`
+        : `Conecte à internet — a fila sobe sozinha e o botão libera.`);
   } else {
     $("minha-parte").textContent =
       "Tudo o que você contou já subiu. Ao finalizar, a lista de produtos sai deste aparelho para liberar espaço; suas contagens continuam guardadas.";
