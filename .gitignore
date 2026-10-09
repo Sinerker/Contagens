@@ -19,3 +19,7 @@ desktop.ini
 # Desenho das telas: fica só no computador
 design/
 teste-teclado/
+
+# Backend (funcoes, tabelas, Edge Functions): fica so no computador
+# enquanto o repositorio for publico. Ver supabase/README.md
+supabase/

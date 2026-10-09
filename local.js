@@ -286,6 +286,20 @@ const LOCAL = (() => {
       return fim(t);
     },
 
+    // Recusa DEFINITIVA do servidor (regra do banco, não falta de sinal).
+    // A contagem continua guardada e continua contando como pendente — nada
+    // some em silêncio —, mas a fila para de tentar e não trava as outras.
+    async marcarRecusada(idLocal, motivo) {
+      const t = await tx(["contagem"], "readwrite");
+      const s = t.objectStore("contagem");
+      const pedido = s.get(idLocal);
+      pedido.onsuccess = () => {
+        const r = pedido.result;
+        if (r) { r.recusada = true; r.erro_envio = String(motivo || "").slice(0, 200); s.put(r); }
+      };
+      return fim(t);
+    },
+
     async apagarLancamento(idLocal) {
       const t = await tx(["contagem"], "readwrite");
       t.objectStore("contagem").delete(idLocal);
@@ -518,28 +532,34 @@ const FILA = {
     this.rodando = true;
 
     try {
-      const pendentes = await LOCAL.pendentes();
+      // Recusadas (o banco disse não de vez) não voltam para a fila: senão
+      // uma linha ruim trava todas as outras, de todos os inventários.
+      const pendentes = (await LOCAL.pendentes()).filter((c) => !c.recusada);
       for (let i = 0; i < pendentes.length; i += 50) {
         const bloco = pendentes.slice(i, i + 50);
-        const corpo = bloco.map((c) => ({
-          id_local: c.id_local, lote_id: c.lote_id, perfil_id: c.perfil_id,
-          seqproduto: c.seqproduto, codacesso: c.codacesso || null,
-          descricao: c.descricao, qtdembalagem: c.qtdembalagem,
-          quantidade: c.quantidade, tipo: c.tipo, corredor: c.corredor,
-          coluna: c.coluna, andar: c.andar, contado_em: c.contado_em,
-          cancela_id: c.cancela_id || null,
-        }));
 
         try {
-          const gravadas = await API.inserir("contagem", corpo, true);
+          const gravadas = await API.inserir("contagem", bloco.map(this.linha), true);
           for (const g of gravadas) await LOCAL.marcarEnviada(g.id_local, g.id);
         } catch (e) {
-          // Já estava lá: a fila reenviou depois de uma queda de sinal.
-          // O identificador do aparelho impediu a duplicata — só marca.
-          if (/duplicate key|id_local/i.test(e.message)) {
-            for (const c of bloco) await LOCAL.marcarEnviada(c.id_local, null);
-          } else {
-            throw e;
+          // Bloco inteiro recusado. Só duplicidade ou recusa definitiva
+          // justificam abrir o bloco; falta de sinal ou erro do servidor
+          // seguem para o catch de fora e a fila espera.
+          if (!this.duplicada(e) && !this.definitiva(e)) throw e;
+
+          // Uma linha já gravada derruba as 50 no banco. Marcar o bloco
+          // todo como enviado perderia as que NÃO estão lá — por isso
+          // cada linha é tentada sozinha e só a que já existe é dada
+          // como enviada.
+          for (const c of bloco) {
+            try {
+              const g = await API.inserir("contagem", [this.linha(c)], true);
+              await LOCAL.marcarEnviada(c.id_local, g && g[0] ? g[0].id : null);
+            } catch (e2) {
+              if (this.duplicada(e2)) await LOCAL.marcarEnviada(c.id_local, null);
+              else if (this.definitiva(e2)) await LOCAL.marcarRecusada(c.id_local, e2.message);
+              else throw e2;
+            }
           }
         }
         await this.avisar();
@@ -550,6 +570,27 @@ const FILA = {
       this.rodando = false;
       await this.avisar();
     }
+  },
+
+  linha(c) {
+    return {
+      id_local: c.id_local, lote_id: c.lote_id, perfil_id: c.perfil_id,
+      seqproduto: c.seqproduto, codacesso: c.codacesso || null,
+      descricao: c.descricao, qtdembalagem: c.qtdembalagem,
+      quantidade: c.quantidade, tipo: c.tipo, corredor: c.corredor,
+      coluna: c.coluna, andar: c.andar, contado_em: c.contado_em,
+      cancela_id: c.cancela_id || null,
+    };
+  },
+
+  duplicada(e) {
+    return /duplicate key|id_local/i.test((e && e.message) || "");
+  },
+
+  // O banco recusou por regra (lote fechado, produto fora do lote,
+  // restrição). Repetir não adianta. Sinal ruim e erro 5xx NÃO entram aqui.
+  definitiva(e) {
+    return /row-level security|violates|invalid input|null value/i.test((e && e.message) || "");
   },
 
   iniciar() {
