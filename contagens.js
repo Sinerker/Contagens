@@ -849,6 +849,27 @@ document.addEventListener("touchstart", () => {
   if (audio && audio.state === "suspended") audio.resume();
 }, { once: true });
 
+/* ---------- versão nova: quando dá para recarregar ----------
+   O pwa.js pergunta isto de 5 em 5 segundos quando há versão nova. Só
+   recarrega com a tela limpa e dois minutos sem ninguém tocar no aparelho.
+   Nada se perde: cada bipe já está gravado no aparelho. Some só o
+   "último lançamento" da tela, que continua na lista. */
+const PARADO_PARA_ATUALIZAR = 2 * 60 * 1000;
+let ultimoToque = Date.now();
+["keydown", "pointerdown", "touchstart", "input"].forEach((ev) =>
+  document.addEventListener(ev, () => { ultimoToque = Date.now(); }, { capture: true, passive: true })
+);
+window.podeRecarregar = () => {
+  if (produto) return false;                                   // produto na tela
+  if ($("codigo").value.trim()) return false;                  // código digitado
+  const q = $("quantidade").value.trim();
+  if (q && !($("qtde1").checked && q === "1")) return false;   // quantidade digitada
+  if ($("tampa").classList.contains("aberta")) return false;   // lista aberta
+  if (!$("barra").hidden) return false;                        // baixando a lista
+  if (FILA.rodando) return false;                              // enviando agora
+  return Date.now() - ultimoToque >= PARADO_PARA_ATUALIZAR;
+};
+
 /* ---------- início ---------- */
 (async function iniciar() {
   if (!sessao) return;

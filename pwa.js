@@ -16,14 +16,51 @@ if ("serviceWorker" in navigator) {
   });
 
   // Versão nova instalada e assumindo: recarrega para a tela inteira passar
-  // a ser da versão nova. Na contagem não — ela continua com a versão em que
-  // abriu, inteira, e pega a nova na próxima vez que abrir.
+  // a ser da versão nova. Na contagem, espera a hora boa: a própria tela diz
+  // quando dá (window.podeRecarregar, no contagens.js) — tudo limpo e dois
+  // minutos sem ninguém mexer. Até lá fica uma barra com "Atualizar agora".
   let recarregou = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!tinhaVersao || recarregou) return;
-    if (/contagens\.html$/.test(location.pathname)) return;
+  const recarregar = () => {
+    if (recarregou) return;
     recarregou = true;
     location.reload();
+  };
+
+  function barraNovaVersao() {
+    if (document.getElementById("barra-versao")) return;
+    const b = document.createElement("div");
+    b.id = "barra-versao";
+    b.style.cssText =
+      "position:fixed;left:0;right:0;bottom:0;z-index:9999;display:flex;gap:.6rem;" +
+      "align-items:center;justify-content:space-between;padding:.6rem .9rem;" +
+      "background:var(--clr-primary,#1a6fd4);color:#fff;font-size:.88rem;" +
+      "box-shadow:0 -2px 8px rgba(0,0,0,.25)";
+    const t = document.createElement("span");
+    t.textContent = "Nova versão disponível — entra sozinha quando você parar.";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Atualizar agora";
+    btn.style.cssText =
+      "flex:none;border:0;border-radius:6px;padding:.45rem .8rem;font-weight:700;" +
+      "background:#fff;color:var(--clr-primary,#1a6fd4)";
+    btn.addEventListener("click", recarregar);
+    b.append(t, btn);
+    document.body.appendChild(b);
+  }
+
+  function esperarHoraBoa() {
+    barraNovaVersao();
+    // contagens.js antigo, sem a função: fica só a barra, como antes.
+    if (typeof window.podeRecarregar !== "function") return;
+    setInterval(() => {
+      try { if (window.podeRecarregar()) recarregar(); } catch (_) { /* tenta de novo */ }
+    }, 5000);
+  }
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!tinhaVersao || recarregou) return;
+    if (/contagens\.html$/.test(location.pathname)) return esperarHoraBoa();
+    recarregar();
   });
 }
 
