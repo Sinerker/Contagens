@@ -19,10 +19,44 @@ function quando(iso) {
   });
 }
 
+/* ---------- sem internet ---------- */
+// Sem rede, a tela usa a última cópia que veio do servidor (API.copia) e
+// avisa de quando ela é. Tudo o que precisa do banco para acontecer —
+// entrar, continuar, criar — fica travado com um aviso, em vez de pendurar.
+let semInternet = false;
+
+function horaCopia(em) {
+  const d = new Date(em);
+  const hoje = new Date().toDateString() === d.toDateString();
+  return hoje
+    ? `às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+    : `em ${quando(d.toISOString())}`;
+}
+
+function avisoRede(msg) {
+  const el = document.getElementById("aviso-rede");
+  el.innerHTML = msg || "";
+  el.hidden = !msg;
+}
+
+function precisaInternet(oque) {
+  avisoRede(`<b>Sem internet:</b> ${oque}`);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 /* ---------- loja ---------- */
 async function montarLojas() {
   const sel = document.getElementById("troca-loja");
-  const lojas = await API.selecionar("loja", "select=id,codigo,nome&ativo=is.true&order=codigo");
+  let lojas;
+  try {
+    lojas = await API.selecionar("loja", "select=id,codigo,nome&ativo=is.true&order=codigo");
+    API.guardarCopia("lojas", lojas);
+  } catch (e) {
+    if (!API.semRede(e)) throw e;
+    const c = API.copia("lojas");
+    if (!c) throw new Error("Sem internet e nenhuma lista salva neste aparelho. Conecte uma vez para abrir.");
+    lojas = c.dado;
+  }
 
   if (!lojas.length) {
     sel.innerHTML = "<option value=''>Nenhuma loja cadastrada</option>";
@@ -94,10 +128,47 @@ async function listar() {
   elF.innerHTML = "";
 
   try {
-    const [lotes, minhas] = await Promise.all([
-      API.selecionar("lote_resumo", `select=*&loja_id=eq.${lojaAtual.id}&order=criado_em.desc&limit=40`),
-      API.selecionar("lote_participante", `select=lote_id&perfil_id=eq.${sessao.usuario.id}`),
-    ]);
+    let lotes, minhas;
+    try {
+      [lotes, minhas] = await Promise.all([
+        API.selecionar("lote_resumo", `select=*&loja_id=eq.${lojaAtual.id}&order=criado_em.desc&limit=40`),
+        API.selecionar("lote_participante", `select=lote_id,finalizado_em&perfil_id=eq.${sessao.usuario.id}`),
+      ]);
+      semInternet = false;
+      avisoRede("");
+      API.guardarCopia(`lotes.${lojaAtual.id}`, { lotes, minhas });
+      // Semente do fechamento: se a pessoa abrir o Finalizar sem internet,
+      // a tela tem de onde desenhar. Só a parte dela — a lista completa de
+      // quem está contando só vem quando o fechamento abre com sinal.
+      for (const l of lotes) {
+        const eu = minhas.find((m) => m.lote_id === l.id);
+        if (!eu) continue;
+        const atual = API.copia(`fechamento.${l.id}`);
+        if (atual && !atual.dado.parcial) {
+          atual.dado.resumo = l;
+          const p = atual.dado.pessoas.find((x) => x.perfil_id === sessao.usuario.id);
+          if (p) p.finalizado_em = eu.finalizado_em;
+          API.guardarCopia(`fechamento.${l.id}`, atual.dado);
+        } else {
+          API.guardarCopia(`fechamento.${l.id}`, {
+            parcial: true, resumo: l,
+            pessoas: [{ perfil_id: sessao.usuario.id, finalizado_em: eu.finalizado_em, perfil: { nome: sessao.usuario.nome } }],
+          });
+        }
+      }
+    } catch (e) {
+      if (!API.semRede(e)) throw e;
+      const c = API.copia(`lotes.${lojaAtual.id}`);
+      if (!c) {
+        semInternet = true;
+        avisoRede("<b>Sem internet</b> e nenhuma lista desta loja salva neste aparelho. Conecte para ver os inventários.");
+        elA.innerHTML = "<p class='cartao-ajuda'>Sem lista salva.</p>";
+        return;
+      }
+      semInternet = true;
+      ({ lotes, minhas } = c.dado);
+      avisoRede(`<b>Sem internet</b> — lista salva ${horaCopia(c.em)}. Pode estar desatualizada. Dá para abrir o <b>Finalizar</b>; entrar e continuar contando precisam de sinal.`);
+    }
     const meus = new Set(minhas.map((m) => m.lote_id));
 
     const abertos = lotes.filter((l) => l.status === "aberto");
@@ -197,7 +268,17 @@ async function marcarBaixados(lotes) {
 }
 
 async function abrir(id) {
-  const lote = await API.selecionar("lote_resumo", `select=*&id=eq.${id}`);
+  if (semInternet || !navigator.onLine) {
+    precisaInternet("a contagem precisa de sinal para abrir. Conecte e tente de novo.");
+    return;
+  }
+  let lote;
+  try {
+    lote = await API.selecionar("lote_resumo", `select=*&id=eq.${id}`);
+  } catch (e) {
+    if (API.semRede(e)) { precisaInternet("a contagem precisa de sinal para abrir. Conecte e tente de novo."); return; }
+    throw e;
+  }
   if (!lote.length) return;
 
   if (lote[0].status === "fechado") {
@@ -206,12 +287,18 @@ async function abrir(id) {
   }
 
   // Entrar no lote é o que dá direito de lançar contagem nele.
-  await API.rpc("entrar_lote", { p_lote: id });
+  try {
+    await API.rpc("entrar_lote", { p_lote: id });
+  } catch (e) {
+    if (API.semRede(e)) { precisaInternet("precisa de internet para entrar no inventário."); return; }
+    throw e;
+  }
   sessionStorage.setItem("loteAtivo", String(id));
   location.href = `contagens.html?lote=${id}`;
 }
 
 document.getElementById("btn-criar").addEventListener("click", () => {
+  if (semInternet || !navigator.onLine) return precisaInternet("criar inventário precisa de internet.");
   if (!lojaAtual) return alert("Cadastre uma loja antes.");
   location.href = `criar-lote.html?loja=${lojaAtual.id}`;
 });
@@ -245,3 +332,6 @@ document.getElementById("btn-criar").addEventListener("click", () => {
 if (sessao) montarLojas().then(listar).catch((e) => {
   document.getElementById("abertos").innerHTML = `<p class="cartao-ajuda">${e.message}</p>`;
 });
+
+// Voltou o sinal com a lista salva na tela: troca pela de agora.
+window.addEventListener("online", () => { if (semInternet && sessao) listar(); });

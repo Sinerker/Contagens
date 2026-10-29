@@ -17,7 +17,7 @@
    tela abre igual dentro da câmara fria.
    ============================================= */
 
-const VERSAO = "contagens-v28";
+const VERSAO = "contagens-v29";
 
 const ARQUIVOS = [
   "./",

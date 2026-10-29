@@ -8,6 +8,12 @@
 
 const CHAVE_SESSAO = "contagens.sessao";
 
+// Quanto uma CONSULTA espera o servidor antes de desistir. Wi-Fi sem internet
+// e sinal muito fraco deixavam a requisição pendurada por minutos e a tela
+// parecia travada. Envios e geração de arquivos não usam isto: podem demorar
+// de verdade, e a fila de envio já tenta de novo sozinha.
+const ESPERA_CONSULTA = 8000;
+
 const API = {
   // ---------------------------------------------
   // Sessão
@@ -56,11 +62,16 @@ const API = {
     if (!s) return null;
     if (Date.now() < (s.expira_em || 0) - 60000) return s.access_token;
 
-    const r = await fetch(`${CONFIG.url}/auth/v1/token?grant_type=refresh_token`, {
-      method: "POST",
-      headers: { apikey: CONFIG.chave, "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: s.refresh_token }),
-    });
+    let r;
+    try {
+      r = await this.buscar(`${CONFIG.url}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { apikey: CONFIG.chave, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: s.refresh_token }),
+      }, ESPERA_CONSULTA);
+    } catch (_) {
+      return s.access_token; // sem rede: usa o que tem e deixa a fila esperar
+    }
     if (!r.ok) return s.access_token; // offline: usa o que tem e deixa a fila esperar
     const novo = await r.json();
     if (!novo.access_token) return s.access_token;
@@ -134,15 +145,15 @@ const API = {
   // Banco
   // ---------------------------------------------
   async selecionar(tabela, consulta = "") {
-    const r = await fetch(`${CONFIG.url}/rest/v1/${tabela}?${consulta}`, {
+    const r = await this.buscar(`${CONFIG.url}/rest/v1/${tabela}?${consulta}`, {
       headers: await this.cabecalhos(),
-    });
+    }, ESPERA_CONSULTA);
     if (!r.ok) throw new Error(await this.erro(r));
     return r.json();
   },
 
   async inserir(tabela, linhas, devolver = false) {
-    const r = await fetch(`${CONFIG.url}/rest/v1/${tabela}`, {
+    const r = await this.buscar(`${CONFIG.url}/rest/v1/${tabela}`, {
       method: "POST",
       headers: await this.cabecalhos(
         devolver ? { Prefer: "return=representation" } : {}
@@ -154,7 +165,7 @@ const API = {
   },
 
   async alterar(tabela, consulta, campos) {
-    const r = await fetch(`${CONFIG.url}/rest/v1/${tabela}?${consulta}`, {
+    const r = await this.buscar(`${CONFIG.url}/rest/v1/${tabela}?${consulta}`, {
       method: "PATCH",
       headers: await this.cabecalhos(),
       body: JSON.stringify(campos),
@@ -163,7 +174,7 @@ const API = {
   },
 
   async apagar(tabela, consulta) {
-    const r = await fetch(`${CONFIG.url}/rest/v1/${tabela}?${consulta}`, {
+    const r = await this.buscar(`${CONFIG.url}/rest/v1/${tabela}?${consulta}`, {
       method: "DELETE",
       headers: await this.cabecalhos(),
     });
@@ -171,7 +182,7 @@ const API = {
   },
 
   async rpc(nome, parametros = {}) {
-    const r = await fetch(`${CONFIG.url}/rest/v1/rpc/${nome}`, {
+    const r = await this.buscar(`${CONFIG.url}/rest/v1/rpc/${nome}`, {
       method: "POST",
       headers: await this.cabecalhos(),
       body: JSON.stringify(parametros),
@@ -182,7 +193,7 @@ const API = {
   },
 
   async funcao(nome, corpo = {}) {
-    const r = await fetch(`${CONFIG.url}/functions/v1/${nome}`, {
+    const r = await this.buscar(`${CONFIG.url}/functions/v1/${nome}`, {
       method: "POST",
       headers: await this.cabecalhos(),
       body: JSON.stringify(corpo),
@@ -190,6 +201,60 @@ const API = {
     const d = await r.json().catch(() => ({}));
     if (!r.ok || d.erro) throw new Error(d.erro || `Falhou (${r.status}).`);
     return d;
+  },
+
+  // ---------------------------------------------
+  // Rede
+  // ---------------------------------------------
+  // fetch que marca falta de rede: erro de conexão ou servidor que não
+  // respondeu a tempo viram um Error com semRede = true. Erro que o servidor
+  // DEVOLVEU (regra, permissão) não é falta de rede e segue normal.
+  async buscar(url, opcoes = {}, espera = 0) {
+    const ctrl = espera ? new AbortController() : null;
+    const relogio = ctrl ? setTimeout(() => ctrl.abort(), espera) : null;
+    try {
+      return await fetch(url, ctrl ? { ...opcoes, signal: ctrl.signal } : opcoes);
+    } catch (e) {
+      const f = new Error(
+        ctrl && ctrl.signal.aborted
+          ? "O servidor não respondeu a tempo. Sem internet?"
+          : "Sem conexão com o servidor."
+      );
+      f.semRede = true;
+      throw f;
+    } finally {
+      if (relogio) clearTimeout(relogio);
+    }
+  },
+
+  // A falha foi por falta de rede (e não por regra do servidor)?
+  semRede(e) {
+    return !navigator.onLine || !!(e && e.semRede);
+  },
+
+  // ---------------------------------------------
+  // Cópia do último dado que veio do servidor
+  // ---------------------------------------------
+  // É o que deixa a lista de inventários e o fechamento abrirem sem
+  // internet. Fica por usuário: num coletor dividido, cada um vê a sua.
+  // Nunca é usada para decidir nada no servidor — só para desenhar a tela.
+  chaveCopia(nome) {
+    const s = this.sessao();
+    return `contagens.copia.${(s && s.usuario && s.usuario.id) || "-"}.${nome}`;
+  },
+
+  guardarCopia(nome, dado) {
+    try {
+      localStorage.setItem(this.chaveCopia(nome), JSON.stringify({ em: Date.now(), dado }));
+    } catch (_) { /* aparelho cheio: só fica sem a cópia */ }
+  },
+
+  copia(nome) {
+    try {
+      return JSON.parse(localStorage.getItem(this.chaveCopia(nome)) || "null");
+    } catch (_) {
+      return null;
+    }
   },
 
   // Texto de um erro JÁ LANÇADO, para mostrar na tela. As chamadas acima

@@ -46,17 +46,69 @@ function recado(msg) {
   $("recado").hidden = !msg;
 }
 
+/* ---------- sem internet ---------- */
+// Sem rede a tela abre com a última cópia guardada (daqui ou da lista de
+// inventários) só para mostrar a situação. Nada que dependa do banco fica
+// disponível: finalizar, voltar a contar, fechar, arquivos e apagar.
+let semRede = false;
+let parcial = false;   // cópia vinda da lista: só a minha parte, sem os outros
+
+function avisoRede(msg) {
+  $("aviso-rede").innerHTML = msg || "";
+  $("aviso-rede").hidden = !msg;
+}
+
+function horaCopia(em) {
+  const d = new Date(em);
+  const hoje = new Date().toDateString() === d.toDateString();
+  return hoje
+    ? `às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+    : `de ${quando(d.toISOString())}`;
+}
+
+function esconderDoBanco() {
+  ["titulo-fechar", "cartao-fechar", "titulo-arquivos", "cartao-arquivos",
+   "titulo-limpeza", "cartao-limpeza"].forEach((id) => { $(id).hidden = true; });
+}
+
 /* ---------- carregar ---------- */
 async function carregar() {
   erro("");
 
-  const [resumo, pessoas] = await Promise.all([
-    API.selecionar("lote_resumo", `select=*&id=eq.${loteId}`),
-    API.selecionar(
-      "lote_participante",
-      `select=perfil_id,entrou_em,finalizado_em,perfil(nome)&lote_id=eq.${loteId}`
-    ),
-  ]);
+  let resumo, pessoas;
+  try {
+    [resumo, pessoas] = await Promise.all([
+      API.selecionar("lote_resumo", `select=*&id=eq.${loteId}`),
+      API.selecionar(
+        "lote_participante",
+        `select=perfil_id,entrou_em,finalizado_em,perfil(nome)&lote_id=eq.${loteId}`
+      ),
+    ]);
+    semRede = false;
+    parcial = false;
+    avisoRede("");
+    if (resumo.length) API.guardarCopia(`fechamento.${loteId}`, { resumo: resumo[0], pessoas });
+  } catch (e) {
+    if (!API.semRede(e)) throw e;
+    semRede = true;
+    const c = API.copia(`fechamento.${loteId}`);
+    if (!c) {
+      avisoRede("<b>Sem internet</b> e nenhum dado deste inventário salvo neste aparelho. Conecte para abrir.");
+      $("minha-parte").textContent = "Sem dados salvos.";
+      $("btn-finalizar").hidden = true;
+      $("btn-voltar-contar").hidden = true;
+      esconderDoBanco();
+      return;
+    }
+    resumo = [c.dado.resumo];
+    pessoas = c.dado.pessoas;
+    parcial = !!c.dado.parcial;
+    avisoRede(
+      `<b>Sem internet</b> — dados salvos ${horaCopia(c.em)}. ` +
+      `Quem já finalizou e os totais podem estar desatualizados. ` +
+      `As contagens deste aparelho, abaixo, são as de agora.`
+    );
+  }
 
   if (!resumo.length) {
     erro("Inventário não encontrado.");
@@ -82,12 +134,17 @@ async function carregar() {
 
   desenharPessoas();
   await desenharMinhaParte();
+  if (semRede) { esconderDoBanco(); return; }
   desenharFechar();
   desenharArquivos();
   await desenharLimpeza();
 }
 
 function desenharPessoas() {
+  if (parcial) {
+    $("pessoas").innerHTML = "<p class='cartao-ajuda'>Sem internet: a lista de quem está contando aparece quando o sinal voltar.</p>";
+    return;
+  }
   if (!participantes.length) {
     $("pessoas").innerHTML = "<p class='cartao-ajuda'>Ninguém entrou neste inventário ainda.</p>";
     return;
@@ -163,6 +220,9 @@ async function desenharMinhaParte() {
     $("minha-parte").textContent =
       `Você finalizou em ${quando(quandoFinalizei)}. Enquanto o inventário não fechar, ainda dá para voltar e contar mais.`;
     btnV.hidden = false;
+    const offline = !navigator.onLine || semRede;
+    btnV.disabled = offline;
+    btnV.textContent = offline ? "Voltar a contar (precisa de internet)" : "Voltar a contar";
     return;
   }
 
@@ -180,7 +240,7 @@ async function desenharMinhaParte() {
       "Tudo o que você contou já subiu. Ao finalizar, a lista de produtos sai deste aparelho para liberar espaço; suas contagens continuam guardadas.";
   }
 
-  const semSinal = !navigator.onLine;
+  const semSinal = !navigator.onLine || semRede;
   if (semSinal) {
     $("minha-parte").innerHTML +=
       `<br><b>Sem internet.</b> Finalizar só é possível com internet: é nela que o app confere, ` +
@@ -201,7 +261,9 @@ async function finalizar() {
   erro("");
   recado("");
 
-  if (!navigator.onLine) {
+  // A tela pode estar com a cópia salva: tenta o servidor antes de decidir.
+  if (semRede && navigator.onLine) { try { await carregar(); } catch (_) {} }
+  if (!navigator.onLine || semRede) {
     erro("Finalizar precisa de internet: é assim que os outros ficam sabendo que você terminou.");
     return;
   }
@@ -263,7 +325,7 @@ async function voltarAContar() {
 
   // Reabrir a parte no banco é o que impede o lote de fechar com a pessoa
   // contando. Sem sinal não dá para garantir isso, então não deixa voltar.
-  if (!navigator.onLine) {
+  if (!navigator.onLine || semRede) {
     erro("Voltar a contar precisa de internet: é assim que o inventário sabe que você não terminou.");
     return;
   }
@@ -618,14 +680,20 @@ $("btn-apagar-inventario").addEventListener("click", apagarInventario);
   if (!loteId) { location.href = "lotes.html"; return; }
   try {
     await carregar();
-    if (lote && lote.status === "fechado" && !apagado()) await gerar();
+    if (lote && !semRede && lote.status === "fechado" && !apagado()) await gerar();
   } catch (e) {
     erro(API.texto(e));
   }
   // A fila continua trabalhando enquanto a tela está aberta: é o que
   // faz o botão de finalizar liberar sozinho quando o sinal volta.
   FILA.aoMudar = () => desenharMinhaParte().catch(() => {});
-  window.addEventListener("online", () => desenharMinhaParte().catch(() => {}));
+  // Sinal de volta: troca a cópia salva pelos dados de agora.
+  const recarregar = () => carregar()
+    .then(() => { if (lote && !semRede && lote.status === "fechado" && !apagado() && !arquivos) return gerar(); })
+    .catch(() => {});
+  window.addEventListener("online", () => { if (semRede) recarregar(); else desenharMinhaParte().catch(() => {}); });
+  // Wi-Fi sem internet não dispara "online": tenta de tempos em tempos.
+  setInterval(() => { if (semRede && navigator.onLine) recarregar(); }, 20000);
   window.addEventListener("offline", () => desenharMinhaParte().catch(() => {}));
   FILA.iniciar();
 })();
