@@ -213,7 +213,12 @@ const API = {
     const ctrl = espera ? new AbortController() : null;
     const relogio = ctrl ? setTimeout(() => ctrl.abort(), espera) : null;
     try {
-      return await fetch(url, ctrl ? { ...opcoes, signal: ctrl.signal } : opcoes);
+      // no-store: resposta do banco nunca vem do cache do navegador. Em
+      // 29/10/2026 o Chrome do Android guardou uma resposta de ERRO (300) e
+      // continuou mostrando ela sem nem perguntar ao servidor, mesmo depois
+      // de o banco ter sido corrigido.
+      const base = { cache: "no-store", ...opcoes };
+      return await fetch(url, ctrl ? { ...base, signal: ctrl.signal } : base);
     } catch (e) {
       const f = new Error(
         ctrl && ctrl.signal.aborted

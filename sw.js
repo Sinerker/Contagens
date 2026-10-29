@@ -33,7 +33,7 @@
    abrir — ali uma recarga no meio do bipe atrapalharia).
    ============================================= */
 
-const VERSAO = "contagens-v31";
+const VERSAO = "contagens-v32";
 
 const ARQUIVOS = [
   "./",
