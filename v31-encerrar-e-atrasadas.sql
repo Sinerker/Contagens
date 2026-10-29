@@ -6,7 +6,7 @@
 -- 1) Colunas novas
 alter table lote_participante
   add column if not exists encerrado_em  timestamptz,
-  add column if not exists encerrado_por uuid references perfil(id);
+  add column if not exists encerrado_por uuid;  -- sem FK: uma segunda ligação com perfil quebra o perfil(nome) do PostgREST
 alter table contagem
   add column if not exists atrasada boolean not null default false;
 alter table lote
