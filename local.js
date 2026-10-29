@@ -216,6 +216,33 @@ const LOCAL = (() => {
       await this.guardarLote(l);
     },
 
+    /* ---------- produto adicionado SEM internet ---------- */
+    // O banco só aceita contagem de produto que está no lote. Adicionado
+    // offline, o produto fica marcado aqui; a fila sobe a adição ANTES das
+    // contagens, e só então as contagens dele.
+    async guardarAdicaoPendente(loteId, seq) {
+      const l = await this.lote(loteId);
+      if (!l) return;
+      l.adicoesPendentes = l.adicoesPendentes || [];
+      if (!l.adicoesPendentes.includes(Number(seq))) l.adicoesPendentes.push(Number(seq));
+      await this.guardarLote(l);
+    },
+
+    async adicoesPendentes() {
+      const saida = [];
+      for (const l of await this.lotes()) {
+        for (const seq of (l.adicoesPendentes || [])) saida.push({ loteId: l.id, seq });
+      }
+      return saida;
+    },
+
+    async removerAdicaoPendente(loteId, seq) {
+      const l = await this.lote(loteId);
+      if (!l || !l.adicoesPendentes) return;
+      l.adicoesPendentes = l.adicoesPendentes.filter((s) => s !== Number(seq));
+      await this.guardarLote(l);
+    },
+
     // Solta a lista de produtos de um lote, mantendo as contagens. É o que
     // libera os sete megabytes quando a pessoa termina a parte dela: a lista
     // sempre pode ser baixada de novo, a contagem não.
@@ -547,6 +574,24 @@ const FILA = {
     this.rodando = true;
 
     try {
+      // 1º as adições de produto feitas sem internet. Sem elas no banco, as
+      // contagens desses produtos seriam recusadas. Falta de sinal aqui para
+      // a fila inteira (vai para o catch de fora) e nada sobe fora de ordem.
+      for (const a of await LOCAL.adicoesPendentes()) {
+        try {
+          await API.rpc("adicionar_produto_ao_lote", { p_lote: a.loteId, p_seqproduto: a.seq });
+          await LOCAL.removerAdicaoPendente(a.loteId, a.seq);
+        } catch (e) {
+          if (e && e.semRede) throw e;
+          if (/fetch|network|conex/i.test((e && e.message) || "")) throw e;
+          // Recusa do banco (lote fechado, sem cadastro, não participa):
+          // repetir não adianta. Solta a adição; as contagens seguem e o banco
+          // decide cada uma — o que ele recusar fica visível como recusado.
+          console.warn("Adição recusada:", a, e && e.message);
+          await LOCAL.removerAdicaoPendente(a.loteId, a.seq);
+        }
+      }
+
       // Recusadas (o banco disse não de vez) não voltam para a fila: senão
       // uma linha ruim trava todas as outras, de todos os inventários.
       const pendentes = (await LOCAL.pendentes()).filter((c) => !c.recusada);

@@ -185,7 +185,7 @@ async function listar() {
       }
       semInternet = true;
       ({ lotes, minhas } = c.dado);
-      avisoRede(`<b>Sem internet</b> — lista salva ${horaCopia(c.em)}. Pode estar desatualizada. Dá para abrir o <b>Finalizar</b>; entrar e continuar contando precisam de sinal.`);
+      avisoRede(`<b>Sem internet</b> — lista salva ${horaCopia(c.em)}. Pode estar desatualizada. Dá para <b>continuar contando</b> nos inventários com a lista baixada neste aparelho e abrir o <b>Finalizar</b>; entrar num inventário novo e criar precisam de sinal.`);
     }
     const meus = new Set(minhas.map((m) => m.lote_id));
 
@@ -285,16 +285,37 @@ async function marcarBaixados(lotes) {
   }
 }
 
-async function abrir(id) {
-  if (semInternet || !navigator.onLine) {
-    precisaInternet("a contagem precisa de sinal para abrir. Conecte e tente de novo.");
+// Sem sinal: entra direto na contagem se a pessoa já participa do lote e a
+// lista dele está inteira neste aparelho. Entrar pela primeira vez precisa
+// do banco (é ele que registra a participação).
+async function abrirSemInternet(id) {
+  const c = lerCopia(`lotes.${lojaAtual.id}`);
+  const l = c && c.dado.lotes.find((x) => x.id === id);
+  const participa = c && c.dado.minhas.some((m) => m.lote_id === id);
+  if (!l || l.status !== "aberto") {
+    precisaInternet("este inventário precisa de sinal para abrir.");
     return;
   }
+  if (!participa) {
+    precisaInternet("precisa de internet para entrar no inventário pela primeira vez.");
+    return;
+  }
+  const e = await LOCAL.estado(id);
+  if (!e.completo) {
+    precisaInternet("a lista deste inventário não está completa neste aparelho. Conecte uma vez para baixar.");
+    return;
+  }
+  sessionStorage.setItem("loteAtivo", String(id));
+  location.href = `contagens.html?lote=${id}`;
+}
+
+async function abrir(id) {
+  if (semInternet || !navigator.onLine) return abrirSemInternet(id);
   let lote;
   try {
     lote = await API.selecionar("lote_resumo", `select=*&id=eq.${id}`);
   } catch (e) {
-    if (faltouRede(e)) { precisaInternet("a contagem precisa de sinal para abrir. Conecte e tente de novo."); return; }
+    if (faltouRede(e)) return abrirSemInternet(id);
     throw e;
   }
   if (!lote.length) return;

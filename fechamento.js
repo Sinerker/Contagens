@@ -86,6 +86,7 @@ function horaCopia(em) {
 
 function esconderDoBanco() {
   ["titulo-fechar", "cartao-fechar", "titulo-arquivos", "cartao-arquivos",
+   "titulo-atrasadas", "cartao-atrasadas",
    "titulo-limpeza", "cartao-limpeza"].forEach((id) => { $(id).hidden = true; });
 }
 
@@ -99,7 +100,7 @@ async function carregar() {
       API.selecionar("lote_resumo", `select=*&id=eq.${loteId}`),
       API.selecionar(
         "lote_participante",
-        `select=perfil_id,entrou_em,finalizado_em,perfil(nome)&lote_id=eq.${loteId}`
+        `select=perfil_id,entrou_em,finalizado_em,encerrado_em,perfil(nome)&lote_id=eq.${loteId}`
       ),
     ]);
     semRede = false;
@@ -155,6 +156,7 @@ async function carregar() {
   if (semRede) { esconderDoBanco(); return; }
   desenharFechar();
   desenharArquivos();
+  desenharAtrasadas();
   await desenharLimpeza();
 }
 
@@ -172,14 +174,51 @@ function desenharPessoas() {
     .sort((a, b) => (a.perfil?.nome || "").localeCompare(b.perfil?.nome || ""))
     .map((p) => {
       const pronto = !!p.finalizado_em;
+      const situacao = !pronto
+        ? "ainda contando"
+        : p.encerrado_em
+          ? "encerrada pelo administrador " + quando(p.encerrado_em)
+          : "finalizou " + quando(p.finalizado_em);
+      // Saída para coletor quebrado ou pessoa que faltou: o administrador
+      // encerra a parte dela, com nome. Fechar à força não existe mais.
+      const podeEncerrar = !pronto && !semRede && lote.status === "aberto" &&
+        sessao.usuario.admin && p.perfil_id !== sessao.usuario.id;
       return `
         <div class="pessoa">
           <span class="pessoa-bola" style="background:${pronto ? "var(--clr-success)" : "var(--clr-warning-border)"}"></span>
           <span class="pessoa-nome">${p.perfil?.nome || "—"}</span>
-          <span class="pessoa-quando">${pronto ? "finalizou " + quando(p.finalizado_em) : "ainda contando"}</span>
+          <span class="pessoa-quando">${situacao}</span>
+          ${podeEncerrar
+            ? `<button class="botao botao--pequeno botao--fantasma" data-encerrar="${p.perfil_id}" data-nome="${(p.perfil?.nome || "").replace(/"/g, "")}">Encerrar a parte</button>`
+            : ""}
         </div>`;
     })
     .join("");
+  document.querySelectorAll("[data-encerrar]").forEach((b) =>
+    b.addEventListener("click", () => encerrarParte(b.dataset.encerrar, b.dataset.nome, b))
+  );
+}
+
+async function encerrarParte(perfilId, nome, btn) {
+  erro("");
+  recado("");
+  const ok = confirm(
+    `Encerrar a parte de ${nome}?\n\n` +
+    `Conta como se ${nome} tivesse finalizado. O que estiver parado no aparelho dele(a) fica de fora do arquivo principal.\n\n` +
+    `Se esse aparelho voltar a ter sinal depois, essas contagens chegam como COMPLEMENTO, num arquivo separado.`
+  );
+  if (!ok) return;
+  btn.disabled = true;
+  btn.textContent = "Encerrando…";
+  try {
+    await API.rpc("encerrar_participacao", { p_lote: loteId, p_perfil: perfilId });
+    recado(`A parte de ${nome} foi encerrada.`);
+    await carregar();
+  } catch (e) {
+    erro(API.texto(e));
+    btn.disabled = false;
+    btn.textContent = "Encerrar a parte";
+  }
 }
 
 /* ---------- minha parte ---------- */
@@ -377,28 +416,21 @@ function desenharFechar() {
       "Todos finalizaram. Fechar encerra o inventário e libera o TXT e o CSV. Depois de fechado, ninguém lança mais nada nele.";
     btn.disabled = false;
     btn.textContent = "Fechar e gerar os arquivos";
-  } else if (sessao.usuario.admin) {
-    $("ajuda-fechar").innerHTML =
-      `<b>${faltam} pessoa(s) ainda não finalizou.</b> Como administrador você pode fechar mesmo assim — ` +
-      `use isso quando alguém não tiver como finalizar. O que essa pessoa já lançou entra no arquivo; o que estiver parado no aparelho dela, não.`;
-    btn.disabled = false;
-    btn.textContent = "Fechar mesmo assim";
   } else {
-    $("ajuda-fechar").textContent =
-      `Ainda faltam ${faltam} de ${lote.participantes} finalizar. Só dá para fechar quando todos terminarem.`;
+    // Ninguém fecha com alguém contando — nem o administrador. A saída para
+    // quem não tem como finalizar é "Encerrar a parte", na lista acima.
+    $("ajuda-fechar").innerHTML =
+      `Ainda faltam ${faltam} de ${lote.participantes} finalizar. Só dá para fechar quando todos terminarem.` +
+      (sessao.usuario.admin
+        ? `<br><br>Se alguém não tiver como finalizar (coletor quebrado, faltou), use <b>Encerrar a parte</b> ao lado do nome, em "Quem está contando".`
+        : "");
     btn.disabled = true;
     btn.textContent = "Fechar e gerar os arquivos";
   }
 }
 
 async function fechar() {
-  const faltam = lote.participantes - lote.finalizados;
-  const forcar = faltam > 0;
-
-  const pergunta = forcar
-    ? `Fechar com ${faltam} pessoa(s) sem finalizar? O que elas não subiram fica de fora do arquivo. Isso não tem volta.`
-    : "Fechar o inventário? Depois disso ninguém lança mais nada nele.";
-  if (!confirm(pergunta)) return;
+  if (!confirm("Fechar o inventário? Depois disso ninguém lança mais nada nele.")) return;
 
   const btn = $("btn-fechar");
   btn.disabled = true;
@@ -406,7 +438,7 @@ async function fechar() {
   erro("");
 
   try {
-    await API.rpc("fechar_lote", { p_lote: loteId, p_forcar: forcar });
+    await API.rpc("fechar_lote", { p_lote: loteId });
     recado("Inventário fechado. Os arquivos estão prontos abaixo.");
     await carregar();
     await gerar();
@@ -521,13 +553,13 @@ const COLUNAS = [
   { titulo: "QUANTIDADE",    tipo: PLANILHA.NUMERO, largura: 12 },
 ];
 
-function montarPlanilha() {
+function montarPlanilha(linhas) {
   return PLANILHA.montar({
     aba: "SEPARAÇÃO",
     cabecalho: COLUNAS.map((c) => c.titulo),
     tipos:     COLUNAS.map((c) => c.tipo),
     larguras:  COLUNAS.map((c) => c.largura),
-    linhas:    arquivos.dados || [],
+    linhas:    linhas || arquivos.dados || [],
   });
 }
 
@@ -575,6 +607,92 @@ async function enviarEmail() {
   }
 }
 
+/* ---------- contagens que chegaram depois do fechamento ----------
+   Só de quem teve a parte encerrada pelo administrador e só o que foi
+   contado antes do encerramento (o banco garante). Não entram no arquivo
+   principal: saem num arquivo à parte, com _COMPLEMENTO no nome, para o
+   principal nunca mudar depois de importado. */
+let complemento = null;   // o que gerar_arquivos(p_atrasadas = true) devolveu
+
+function atrasadasSemEnvio() {
+  if (!Number(lote.atrasadas || 0)) return false;
+  if (!lote.atrasadas_enviado_em) return true;
+  return new Date(lote.atrasadas_ultima) > new Date(lote.atrasadas_enviado_em);
+}
+
+function desenharAtrasadas() {
+  const n = Number(lote.atrasadas || 0);
+  const mostrar = lote.status === "fechado" && !apagado() && n > 0;
+  $("titulo-atrasadas").hidden = !mostrar;
+  $("cartao-atrasadas").hidden = !mostrar;
+  if (!mostrar) return;
+  $("ajuda-atrasadas").innerHTML =
+    `<b>${numero(n)} contagem(ns) chegaram depois do fechamento</b> (a última em ${quando(lote.atrasadas_ultima)}), ` +
+    `de quem teve a parte encerrada pelo administrador. Elas <b>não</b> entram no arquivo principal — ` +
+    `saem num arquivo separado, com <b>_COMPLEMENTO</b> no nome. Confira antes de importar no sistema.` +
+    (atrasadasSemEnvio()
+      ? `<br><br>O complemento ainda não foi enviado por e-mail.`
+      : `<br><br>Complemento enviado por e-mail em ${quando(lote.atrasadas_enviado_em)}.`);
+}
+
+async function gerarComplemento() {
+  complemento = await API.rpc("gerar_arquivos", { p_lote: loteId, p_atrasadas: true });
+  if (Number(complemento.cancelamentos_ignorados || 0) > 0) {
+    $("ajuda-atrasadas").innerHTML +=
+      `<br><br><b>Atenção:</b> ${numero(complemento.cancelamentos_ignorados)} cancelamento(s) chegaram atrasados apontando ` +
+      `para lançamentos que já estavam no arquivo principal. Eles não mudam nenhum arquivo — confira esses produtos na mão ` +
+      `(são as linhas com quantidade 0 na planilha do complemento).`;
+  }
+  return complemento;
+}
+
+async function baixarTxtComplemento() {
+  erro("");
+  try {
+    const c = await gerarComplemento();
+    baixar(c.txt, `${c.arquivo}.txt`, "text/plain;charset=utf-8;");
+  } catch (e) { erro("Não consegui montar o complemento: " + API.texto(e)); }
+}
+
+async function baixarPlanilhaComplemento() {
+  const btn = $("btn-planilha-atr");
+  erro("");
+  btn.disabled = true;
+  try {
+    const c = await gerarComplemento();
+    baixar("\ufeff" + c.csv, `${c.arquivo}.csv`, "text/csv;charset=utf-8;");
+    const xlsx = await montarPlanilha(c.dados || []);
+    baixar(xlsx, `${c.arquivo}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  } catch (e) {
+    erro("Não consegui montar a planilha do complemento: " + API.texto(e));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function enviarComplemento() {
+  const btn = $("btn-email-atr");
+  btn.disabled = true;
+  btn.textContent = "Enviando…";
+  erro("");
+  try {
+    const r = await API.funcao("enviar-arquivos", { lote_id: loteId, atrasadas: true });
+    // Função de e-mail antiga ignora "atrasadas" e manda o arquivo PRINCIPAL.
+    // Só marca o complemento como enviado se ela confirmar que mandou ele.
+    if (r.complemento !== true) {
+      throw new Error("o envio do complemento ainda não está ativo no servidor (o e-mail que saiu foi o do arquivo principal). Baixe o TXT e a planilha do complemento aqui e me avise");
+    }
+    try { await API.rpc("marcar_atrasadas_enviadas", { p_lote: loteId }); } catch (_) {}
+    recado(r.mensagem || "Complemento enviado por e-mail.");
+    await carregar();
+  } catch (e) {
+    erro("Não consegui enviar o complemento: " + API.texto(e) + " Ele continua disponível para baixar aqui.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Enviar complemento por e-mail";
+  }
+}
+
 /* ---------- apagar o inventário ---------- */
 // Uma ação só, e ela leva tudo: os lançamentos e o inventário no servidor,
 // e a lista e as contagens neste aparelho. O TXT e o CSV não ficam guardados
@@ -616,6 +734,15 @@ async function desenharLimpeza() {
       `deixaria você sem o TXT e sem o CSV, sem volta. Envie acima e o botão libera.`;
     btn.disabled = true;
     btn.textContent = "Apagar (bloqueado até enviar o e-mail)";
+    return;
+  }
+
+  if (atrasadasSemEnvio()) {
+    $("ajuda-limpeza").innerHTML =
+      `<b>Chegaram contagens depois do fechamento que ainda não foram enviadas por e-mail.</b> ` +
+      `Envie o complemento acima antes de apagar — depois de apagado, ele não pode mais ser gerado.`;
+    btn.disabled = true;
+    btn.textContent = "Apagar (bloqueado até enviar o complemento)";
     return;
   }
 
@@ -691,6 +818,9 @@ $("btn-txt").addEventListener("click", baixarTxt);
 $("btn-planilha").addEventListener("click", baixarPlanilha);
 $("btn-email").addEventListener("click", enviarEmail);
 $("btn-apagar-inventario").addEventListener("click", apagarInventario);
+$("btn-txt-atr").addEventListener("click", baixarTxtComplemento);
+$("btn-planilha-atr").addEventListener("click", baixarPlanilhaComplemento);
+$("btn-email-atr").addEventListener("click", enviarComplemento);
 
 /* ---------- início ---------- */
 (async function iniciar() {

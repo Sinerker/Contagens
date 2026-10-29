@@ -117,8 +117,47 @@ function liberarBusca() {
   $("quantidade").disabled = false;
 }
 
+/* ---------- sem internet ----------
+   A tela abre com o que o aparelho já guarda do lote (nome, lista de
+   produtos baixada). Contar funciona igual; a fila sobe quando o sinal
+   voltar. Só não abre se a lista do lote nunca foi baixada inteira aqui. */
+function faltouRede(e) {
+  if (typeof API.semRede === "function") return API.semRede(e);
+  return !navigator.onLine || !!(e && e.semRede) ||
+    /fetch|network|conex|tempo|abort/i.test((e && e.message) || "");
+}
+
+function avisoRede(msg) {
+  $("aviso-rede").innerHTML = msg || "";
+  $("aviso-rede").hidden = !msg;
+}
+
+let contandoOffline = false;
+
 async function prepararLote() {
-  const resumo = await API.selecionar("lote_resumo", `select=*&id=eq.${loteId}`);
+  let resumo;
+  try {
+    resumo = await API.selecionar("lote_resumo", `select=*&id=eq.${loteId}`);
+  } catch (e) {
+    if (!faltouRede(e)) throw e;
+    const g = await LOCAL.lote(loteId);
+    if (!g || !g.completo) {
+      travarBusca("aguardando internet");
+      $("baixando").className = "aviso aviso--atencao";
+      $("baixando").textContent =
+        "Sem internet, e a lista deste inventário não está completa neste aparelho. Conecte uma vez para baixar — depois disso dá para contar sem sinal.";
+      $("baixando").hidden = false;
+      return false;
+    }
+    // O que conta para conferir a lista é quantas linhas foram baixadas;
+    // produtos adicionados aqui sem sinal estão à parte (EXTRAS).
+    resumo = [{
+      id: g.id, nome: g.nome, loja_codigo: g.loja_codigo, loja_nome: g.loja_nome,
+      status: g.status, itens: g.baixados,
+    }];
+    contandoOffline = true;
+    avisoRede("<b>Sem internet</b> — contando no aparelho. Tudo fica guardado aqui e sobe sozinho quando o sinal voltar.");
+  }
   if (!resumo.length) { alert("Inventário não encontrado."); location.href = "lotes.html"; return false; }
   lote = resumo[0];
   $("lote-nome").textContent = lote.nome;
@@ -146,6 +185,14 @@ async function prepararLote() {
     completo: !!(guardado && guardado.completo),
     parte: (guardado && guardado.parte) || 0,
   };
+  // Adição feita sem sinal que ainda não subiu: a lista nova do servidor não
+  // tem esse produto. Mantém a marca e a linha dele até a fila subir.
+  const pendentes = (guardado && guardado.adicoesPendentes) || [];
+  if (pendentes.length) {
+    base.adicoesPendentes = pendentes.slice();
+    base.extras = ((guardado && guardado.extras) || [])
+      .filter((linha) => pendentes.includes(Number(String(linha).split("\t")[0])));
+  }
 
   if (!base.completo) {
     if (!navigator.onLine) {
@@ -483,20 +530,36 @@ async function foraDoLote(termo) {
 
 async function adicionarAoLote(item, codigoBipado) {
   const btn = $("btn-adicionar");
-  if (!navigator.onLine) {
-    recado("Adicionar produto precisa de internet: a lista é a mesma para todo mundo.");
-    return;
-  }
   btn.disabled = true;
   btn.textContent = "Adicionando…";
+
+  // Sem sinal, o produto entra NESTE aparelho na hora e a adição vai para a
+  // fila; ela sobe antes das contagens dele (ver FILA.enviar, no local.js).
+  let semSinal = !navigator.onLine;
+  if (!semSinal) {
+    try {
+      await API.rpc("adicionar_produto_ao_lote", { p_lote: loteId, p_seqproduto: item.seqproduto });
+    } catch (e) {
+      if (!faltouRede(e)) {
+        btn.disabled = false;
+        btn.textContent = "Adicionar a este inventário";
+        recado(API.texto(e));
+        return;
+      }
+      semSinal = true;
+    }
+  }
+
   try {
-    await API.rpc("adicionar_produto_ao_lote", { p_lote: loteId, p_seqproduto: item.seqproduto });
+    if (semSinal) await LOCAL.guardarAdicaoPendente(loteId, item.seqproduto);
     const linha = linhaDoProduto(item);
     EXTRAS.push(linha);
     await LOCAL.guardarExtra(loteId, linha);
     lote.itens = (lote.itens || 0) + 1;
     mostrarSelo(lote.itens, lote.itens, true);
-    recado(`${item.descricao} entrou no inventário.`, false);
+    recado(semSinal
+      ? `${item.descricao} entrou neste aparelho. Ele vai para o inventário de todos quando o sinal voltar — pode contar normalmente.`
+      : `${item.descricao} entrou no inventário.`, false);
     await mostrarProduto(item, codigoBipado);
   } catch (e) {
     btn.disabled = false;
@@ -793,7 +856,16 @@ document.addEventListener("touchstart", () => {
 
   travarBusca("carregando…");
   montarSelects();
-  const pronto = await prepararLote();
+  let pronto = false;
+  try {
+    pronto = await prepararLote();
+  } catch (e) {
+    travarBusca("erro ao abrir");
+    $("baixando").className = "aviso aviso--erro";
+    $("baixando").textContent = "Não consegui abrir o inventário: " + API.texto(e);
+    $("baixando").hidden = false;
+  }
+  window.addEventListener("online", () => { if (contandoOffline) avisoRede(""); });
   await atualizarContador();
   await FILA.avisar();
   FILA.iniciar();
