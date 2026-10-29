@@ -10,14 +10,30 @@
    banco nunca passa por aqui: dado velho servido como
    novo seria pior que erro de conexão.
 
-   Regra: REDE PRIMEIRO, com 2,5 s de paciência. Se a rede
-   responder, vale a versão nova — abrir a tela já traz a
-   correção publicada, sem recarregar duas vezes. Se a rede
-   demorar ou não existir, vale o que está guardado, e a
-   tela abre igual dentro da câmara fria.
+   Regra (desde a v30): UMA VERSÃO INTEIRA OU NENHUMA.
+
+   - Instalar uma versão nova baixa TODOS os arquivos de
+     uma vez, direto do servidor. Se qualquer um falhar,
+     a instalação inteira falha e o aparelho continua com
+     a versão anterior completa; o navegador tenta de novo
+     na próxima abertura.
+   - As telas são servidas sempre da versão instalada.
+     Nunca mais um arquivo novo misturado com um velho.
+
+   Por que mudou: até a v29 cada arquivo ia à rede com
+   2,5 s de paciência e, se a rede demorasse, usava o
+   guardado. Com sinal lento, um arquivo chegava novo e o
+   outro velho. Em 29/10/2026 o lotes.js novo rodou com o
+   api.js velho e a lista parou ("API.semRede is not a
+   function").
+
+   O que garante que a versão nova entra logo: o pwa.js
+   recarrega a tela quando ela é instalada (menos na tela
+   de contagem, que pega a versão nova na próxima vez que
+   abrir — ali uma recarga no meio do bipe atrapalharia).
    ============================================= */
 
-const VERSAO = "contagens-v29";
+const VERSAO = "contagens-v30";
 
 const ARQUIVOS = [
   "./",
@@ -32,12 +48,27 @@ const ARQUIVOS = [
   "icon-192.png", "icon-512.png", "apple-touch-icon.png",
 ];
 
+// Endereço completo de cada arquivo da versão, para reconhecer o pedido.
+const DA_VERSAO = new Set(ARQUIVOS.map((a) => new URL(a, self.location).href));
+
 self.addEventListener("install", (e) => {
-  e.waitUntil(
-    caches.open(VERSAO)
-      .then((c) => Promise.allSettled(ARQUIVOS.map((a) => c.add(a))))
-      .then(() => self.skipWaiting())
-  );
+  e.waitUntil((async () => {
+    const cache = await caches.open(VERSAO);
+    try {
+      // cache: "reload" passa por cima do cache HTTP do navegador: o que
+      // entra aqui é o que está publicado agora, não uma cópia de horas atrás.
+      await Promise.all(ARQUIVOS.map(async (a) => {
+        const r = await fetch(new Request(a, { cache: "reload" }));
+        if (!r.ok) throw new Error(`${a}: ${r.status}`);
+        await cache.put(a, r);
+      }));
+    } catch (err) {
+      // Versão incompleta não serve: apaga o que entrou e falha a instalação.
+      await caches.delete(VERSAO);
+      throw err;
+    }
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (e) => {
@@ -48,41 +79,21 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-const ESPERA_REDE = 2500;   // milissegundos
-
 self.addEventListener("fetch", (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== "GET") return;
+  const req = e.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
   if (url.origin !== location.origin) return; // banco não passa por aqui
 
+  // Tira o ?lote=5 etc. para achar a tela guardada.
+  const semBusca = url.origin + url.pathname;
+  if (!DA_VERSAO.has(semBusca)) return; // arquivo que não é do app: rede normal
+
   e.respondWith((async () => {
-    const guardado = await caches.match(e.request);
-
-    // Sem internet declarada pelo aparelho: nem tenta, usa o que tem.
-    // É o caso da câmara fria e do depósito sem cobertura.
-    if (!navigator.onLine && guardado) return guardado;
-
-    const daRede = fetch(e.request).then((r) => {
-      if (r && r.ok) {
-        const copia = r.clone();
-        caches.open(VERSAO).then((c) => c.put(e.request, copia));
-      }
-      return r;
-    });
-    // Deixa o download terminar mesmo se a resposta já tiver saído daqui:
-    // é assim que o cache fica em dia para a próxima abertura.
-    e.waitUntil(daRede.catch(() => {}));
-
-    // Primeira vez, nada guardado: não há alternativa senão esperar.
-    if (!guardado) return daRede;
-
-    // O ponto desta função: a versão nova ganha sempre que a rede
-    // responder a tempo. Antes era o contrário — servia o guardado na
-    // hora e atualizava por trás, e aí a primeira recarga depois de uma
-    // publicação ainda rodava o código velho. Em 07/10/2026 isso fez uma
-    // carga de cadastro falhar com o leitor antigo, já corrigido no ar.
-    const relogio = new Promise((ok) => setTimeout(() => ok(null), ESPERA_REDE));
-    const resposta = await Promise.race([daRede.catch(() => null), relogio]);
-    return resposta || guardado;
+    const cache = await caches.open(VERSAO);
+    const guardado = await cache.match(req, { ignoreSearch: true });
+    if (guardado) return guardado;
+    // Só acontece antes da primeira instalação terminar.
+    return fetch(req);
   })());
 });

@@ -46,6 +46,24 @@ function recado(msg) {
   $("recado").hidden = !msg;
 }
 
+/* ---------- reserva para api.js antigo ----------
+   Logo depois de uma publicação, o aparelho pode rodar esta tela nova com o
+   api.js da versão anterior, que não tem semRede/guardarCopia/copia. Em
+   29/10/2026 isso derrubou a lista com "API.semRede is not a function".
+   Estas três funções usam as do api.js quando existem e, senão, fazem o
+   mesmo do jeito simples — a tela abre de qualquer forma. */
+function faltouRede(e) {
+  if (typeof API.semRede === "function") return API.semRede(e);
+  return !navigator.onLine || !!(e && e.semRede) ||
+    /fetch|network|conex|tempo|abort/i.test((e && e.message) || "");
+}
+function salvarCopia(nome, dado) {
+  if (typeof API.guardarCopia === "function") API.guardarCopia(nome, dado);
+}
+function lerCopia(nome) {
+  return typeof API.copia === "function" ? API.copia(nome) : null;
+}
+
 /* ---------- sem internet ---------- */
 // Sem rede a tela abre com a última cópia guardada (daqui ou da lista de
 // inventários) só para mostrar a situação. Nada que dependa do banco fica
@@ -87,11 +105,11 @@ async function carregar() {
     semRede = false;
     parcial = false;
     avisoRede("");
-    if (resumo.length) API.guardarCopia(`fechamento.${loteId}`, { resumo: resumo[0], pessoas });
+    if (resumo.length) salvarCopia(`fechamento.${loteId}`, { resumo: resumo[0], pessoas });
   } catch (e) {
-    if (!API.semRede(e)) throw e;
+    if (!faltouRede(e)) throw e;
     semRede = true;
-    const c = API.copia(`fechamento.${loteId}`);
+    const c = lerCopia(`fechamento.${loteId}`);
     if (!c) {
       avisoRede("<b>Sem internet</b> e nenhum dado deste inventário salvo neste aparelho. Conecte para abrir.");
       $("minha-parte").textContent = "Sem dados salvos.";

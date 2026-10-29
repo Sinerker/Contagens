@@ -19,6 +19,24 @@ function quando(iso) {
   });
 }
 
+/* ---------- reserva para api.js antigo ----------
+   Logo depois de uma publicação, o aparelho pode rodar esta tela nova com o
+   api.js da versão anterior, que não tem semRede/guardarCopia/copia. Em
+   29/10/2026 isso derrubou a lista com "API.semRede is not a function".
+   Estas três funções usam as do api.js quando existem e, senão, fazem o
+   mesmo do jeito simples — a tela abre de qualquer forma. */
+function faltouRede(e) {
+  if (typeof API.semRede === "function") return API.semRede(e);
+  return !navigator.onLine || !!(e && e.semRede) ||
+    /fetch|network|conex|tempo|abort/i.test((e && e.message) || "");
+}
+function salvarCopia(nome, dado) {
+  if (typeof API.guardarCopia === "function") API.guardarCopia(nome, dado);
+}
+function lerCopia(nome) {
+  return typeof API.copia === "function" ? API.copia(nome) : null;
+}
+
 /* ---------- sem internet ---------- */
 // Sem rede, a tela usa a última cópia que veio do servidor (API.copia) e
 // avisa de quando ela é. Tudo o que precisa do banco para acontecer —
@@ -50,10 +68,10 @@ async function montarLojas() {
   let lojas;
   try {
     lojas = await API.selecionar("loja", "select=id,codigo,nome&ativo=is.true&order=codigo");
-    API.guardarCopia("lojas", lojas);
+    salvarCopia("lojas", lojas);
   } catch (e) {
-    if (!API.semRede(e)) throw e;
-    const c = API.copia("lojas");
+    if (!faltouRede(e)) throw e;
+    const c = lerCopia("lojas");
     if (!c) throw new Error("Sem internet e nenhuma lista salva neste aparelho. Conecte uma vez para abrir.");
     lojas = c.dado;
   }
@@ -136,29 +154,29 @@ async function listar() {
       ]);
       semInternet = false;
       avisoRede("");
-      API.guardarCopia(`lotes.${lojaAtual.id}`, { lotes, minhas });
+      salvarCopia(`lotes.${lojaAtual.id}`, { lotes, minhas });
       // Semente do fechamento: se a pessoa abrir o Finalizar sem internet,
       // a tela tem de onde desenhar. Só a parte dela — a lista completa de
       // quem está contando só vem quando o fechamento abre com sinal.
       for (const l of lotes) {
         const eu = minhas.find((m) => m.lote_id === l.id);
         if (!eu) continue;
-        const atual = API.copia(`fechamento.${l.id}`);
+        const atual = lerCopia(`fechamento.${l.id}`);
         if (atual && !atual.dado.parcial) {
           atual.dado.resumo = l;
           const p = atual.dado.pessoas.find((x) => x.perfil_id === sessao.usuario.id);
           if (p) p.finalizado_em = eu.finalizado_em;
-          API.guardarCopia(`fechamento.${l.id}`, atual.dado);
+          salvarCopia(`fechamento.${l.id}`, atual.dado);
         } else {
-          API.guardarCopia(`fechamento.${l.id}`, {
+          salvarCopia(`fechamento.${l.id}`, {
             parcial: true, resumo: l,
             pessoas: [{ perfil_id: sessao.usuario.id, finalizado_em: eu.finalizado_em, perfil: { nome: sessao.usuario.nome } }],
           });
         }
       }
     } catch (e) {
-      if (!API.semRede(e)) throw e;
-      const c = API.copia(`lotes.${lojaAtual.id}`);
+      if (!faltouRede(e)) throw e;
+      const c = lerCopia(`lotes.${lojaAtual.id}`);
       if (!c) {
         semInternet = true;
         avisoRede("<b>Sem internet</b> e nenhuma lista desta loja salva neste aparelho. Conecte para ver os inventários.");
@@ -276,7 +294,7 @@ async function abrir(id) {
   try {
     lote = await API.selecionar("lote_resumo", `select=*&id=eq.${id}`);
   } catch (e) {
-    if (API.semRede(e)) { precisaInternet("a contagem precisa de sinal para abrir. Conecte e tente de novo."); return; }
+    if (faltouRede(e)) { precisaInternet("a contagem precisa de sinal para abrir. Conecte e tente de novo."); return; }
     throw e;
   }
   if (!lote.length) return;
@@ -290,7 +308,7 @@ async function abrir(id) {
   try {
     await API.rpc("entrar_lote", { p_lote: id });
   } catch (e) {
-    if (API.semRede(e)) { precisaInternet("precisa de internet para entrar no inventário."); return; }
+    if (faltouRede(e)) { precisaInternet("precisa de internet para entrar no inventário."); return; }
     throw e;
   }
   sessionStorage.setItem("loteAtivo", String(id));
