@@ -300,6 +300,21 @@ const LOCAL = (() => {
       return fim(t);
     },
 
+    // Volta para a fila lançamentos que o aparelho achava que tinham subido
+    // mas que o servidor não tem (ver fechamento.js, conferirComServidor).
+    async desmarcarEnviadas(idsLocal) {
+      const t = await tx(["contagem"], "readwrite");
+      const s = t.objectStore("contagem");
+      idsLocal.forEach((id) => {
+        const pedido = s.get(id);
+        pedido.onsuccess = () => {
+          const r = pedido.result;
+          if (r) { r.enviado = 0; r.recusada = false; delete r.erro_envio; s.put(r); }
+        };
+      });
+      return fim(t);
+    },
+
     async apagarLancamento(idLocal) {
       const t = await tx(["contagem"], "readwrite");
       t.objectStore("contagem").delete(idLocal);

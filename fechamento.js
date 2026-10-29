@@ -122,6 +122,22 @@ async function pendentesDoLote() {
   return todas.filter((c) => !c.enviado).length;
 }
 
+/* Pergunta ao banco quais lançamentos deste aparelho ele NÃO tem. A fila marca
+   como enviado também quando o banco responde "duplicado", sem provar que a
+   linha certa está lá — então "enviado" no aparelho não basta para finalizar.
+   Devolve quantos estavam faltando (já voltaram para a fila). Sem sinal, lança. */
+async function conferirComServidor() {
+  const enviadas = (await LOCAL.doLote(loteId)).filter((c) => c.enviado && !c.recusada);
+  const ausentes = [];
+  for (let i = 0; i < enviadas.length; i += 500) {
+    const ids = enviadas.slice(i, i + 500).map((c) => c.id_local);
+    const falta = await API.rpc("ids_ausentes", { p_lote: loteId, p_ids: ids });
+    if (Array.isArray(falta)) ausentes.push(...falta);
+  }
+  if (ausentes.length) await LOCAL.desmarcarEnviadas(ausentes);
+  return ausentes.length;
+}
+
 async function desenharMinhaParte() {
   const btnF = $("btn-finalizar");
   const btnV = $("btn-voltar-contar");
@@ -164,11 +180,20 @@ async function desenharMinhaParte() {
       "Tudo o que você contou já subiu. Ao finalizar, a lista de produtos sai deste aparelho para liberar espaço; suas contagens continuam guardadas.";
   }
 
+  const semSinal = !navigator.onLine;
+  if (semSinal) {
+    $("minha-parte").innerHTML +=
+      `<br><b>Sem internet.</b> Finalizar só é possível com internet: é nela que o app confere, ` +
+      `com o servidor, se tudo o que foi contado neste aparelho chegou.`;
+  }
+
   btnF.hidden = false;
-  btnF.disabled = pendentes > 0;
-  btnF.textContent = pendentes > 0
-    ? `Aguardando ${numero(pendentes)} contagem(ns) subir…`
-    : "Finalizei minha contagem";
+  btnF.disabled = pendentes > 0 || semSinal;
+  btnF.textContent = semSinal
+    ? "Sem internet — conecte para finalizar"
+    : pendentes > 0
+      ? `Aguardando ${numero(pendentes)} contagem(ns) subir…`
+      : "Finalizei minha contagem";
 }
 
 async function finalizar() {
@@ -187,7 +212,26 @@ async function finalizar() {
   try {
     // Última tentativa de esvaziar a fila antes de travar a decisão.
     await FILA.enviar();
+
+    // Confere com o servidor, de verdade. O que ele não tiver volta para a
+    // fila e sobe de novo; só segue quando a conferência fecha limpa.
+    btn.textContent = "Conferindo com o servidor…";
+    let voltaram = 0;
+    for (let rodada = 0; rodada < 3; rodada++) {
+      const faltavam = await conferirComServidor();
+      if (!faltavam) break;
+      voltaram += faltavam;
+      await FILA.enviar();
+    }
     const pendentes = await pendentesDoLote();
+    if (pendentes === 0 && voltaram) {
+      // Subiu tudo de novo; uma última conferência fecha a conta.
+      if (await conferirComServidor()) {
+        await carregar();
+        erro("O servidor ainda não tem todas as contagens deste aparelho. Tente de novo em instantes.");
+        return;
+      }
+    }
     if (pendentes > 0) {
       // A ordem importa: carregar() limpa o aviso de erro, então a recusa
       // tem que ser escrita DEPOIS de redesenhar a tela. Ao contrário, a
@@ -213,6 +257,27 @@ async function finalizar() {
 }
 
 async function voltarAContar() {
+  const btn = $("btn-voltar-contar");
+  erro("");
+  recado("");
+
+  // Reabrir a parte no banco é o que impede o lote de fechar com a pessoa
+  // contando. Sem sinal não dá para garantir isso, então não deixa voltar.
+  if (!navigator.onLine) {
+    erro("Voltar a contar precisa de internet: é assim que o inventário sabe que você não terminou.");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Reabrindo…";
+  try {
+    await API.rpc("reabrir_participacao", { p_lote: loteId });
+  } catch (e) {
+    erro(API.texto(e));
+    btn.disabled = false;
+    btn.textContent = "Voltar a contar";
+    return;
+  }
   sessionStorage.setItem("loteAtivo", String(loteId));
   location.href = `contagens.html?lote=${loteId}`;
 }
@@ -560,5 +625,7 @@ $("btn-apagar-inventario").addEventListener("click", apagarInventario);
   // A fila continua trabalhando enquanto a tela está aberta: é o que
   // faz o botão de finalizar liberar sozinho quando o sinal volta.
   FILA.aoMudar = () => desenharMinhaParte().catch(() => {});
+  window.addEventListener("online", () => desenharMinhaParte().catch(() => {}));
+  window.addEventListener("offline", () => desenharMinhaParte().catch(() => {}));
   FILA.iniciar();
 })();
